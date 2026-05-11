@@ -112,6 +112,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
     var searchQuery by remember { mutableStateOf("") }
     val limit = 8
     var totalRecipes by remember { mutableIntStateOf(0) }
+    var sortOrder by remember { mutableStateOf("Default") } // "Default", "A-Z", "Z-A"
 
     LaunchedEffect(currentPage, isRefreshing, searchQuery) {
         isLoading = true
@@ -125,8 +126,6 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                 val response = servicio.searchRecipes(searchQuery)
                 listaRecipes = response.recipes ?: emptyList()
                 totalRecipes = response.total ?: 0
-                // Al buscar, reiniciamos a página 1 visualmente si quisiéramos, 
-                // pero DummyJSON devuelve todo en la búsqueda simple.
             }
         } catch (e: Exception) {
             Log.e("RECIPES_UI", "Error: ${e.message}")
@@ -136,16 +135,63 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
         }
     }
 
+    val sortedRecipes = remember(listaRecipes, sortOrder) {
+        when (sortOrder) {
+            "A-Z" -> listaRecipes.sortedBy { it.name }
+            "Z-A" -> listaRecipes.sortedByDescending { it.name }
+            else -> listaRecipes
+        }
+    }
+
     val totalPages = if (totalRecipes > 0) (totalRecipes + limit - 1) / limit else 1
 
     Scaffold(
         topBar = {
             Column(modifier = Modifier.background(Background).padding(top = 24.dp, start = 8.dp, end = 24.dp, bottom = 12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Rounded.ArrowBack, null, tint = OnBackground)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.Rounded.ArrowBack, null, tint = OnBackground)
+                        }
+                        Text("Recetas", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
                     }
-                    Text("Recetas", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
+                    
+                    // Menú de Filtro
+                    var showSortMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showSortMenu = true }) {
+                            Icon(
+                                Icons.Rounded.FilterList, 
+                                null, 
+                                tint = if (sortOrder == "Default") OnBackground else Primary
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            modifier = Modifier.background(Surface)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Por defecto", color = OnSurface) },
+                                onClick = { sortOrder = "Default"; showSortMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.Sort, null, tint = Primary) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Nombre A-Z", color = OnSurface) },
+                                onClick = { sortOrder = "A-Z"; showSortMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.SortByAlpha, null, tint = Primary) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Nombre Z-A", color = OnSurface) },
+                                onClick = { sortOrder = "Z-A"; showSortMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.SortByAlpha, null, tint = Primary) }
+                            )
+                        }
+                    }
                 }
                 
                 Spacer(Modifier.height(16.dp))
@@ -204,7 +250,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(listaRecipes, key = { it.id ?: 0 }) { recipe ->
+                    items(sortedRecipes, key = { it.id ?: 0 }) { recipe ->
                         RecipeCardPremium(
                             recipe = recipe,
                             isFav = favoritos.contains(recipe.id),
