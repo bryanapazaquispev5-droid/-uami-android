@@ -117,16 +117,13 @@ fun Contenido(
         ) {
             composable("inicio") { ScreenInicio() }
             composable("posts") { 
-                // Usamos el parámetro 'servicio' de forma mínima para evitar el error de "unused"
-                println("Cargando servicio de posts: $servicio")
-                Text("Pantalla de Posts")
+                ScreenPosts(navController, servicio) 
             }
             composable("postsVer/{id}", arguments = listOf(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                println("Ver post con ID: $id usando servicio: $servicio")
-                Text("Detalle del Post: $id")
+                ScreenPost(navController, servicio, id)
             }
         }
     }
