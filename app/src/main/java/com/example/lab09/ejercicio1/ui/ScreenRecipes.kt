@@ -109,16 +109,25 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
     var isLoading by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     var currentPage by remember { mutableIntStateOf(1) }
+    var searchQuery by remember { mutableStateOf("") }
     val limit = 8
     var totalRecipes by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(currentPage, isRefreshing) {
+    LaunchedEffect(currentPage, isRefreshing, searchQuery) {
         isLoading = true
         try {
-            val skip = (currentPage - 1) * limit
-            val response = servicio.getRecipes(limit, skip)
-            listaRecipes = response.recipes ?: emptyList()
-            totalRecipes = response.total ?: 0
+            if (searchQuery.isEmpty()) {
+                val skip = (currentPage - 1) * limit
+                val response = servicio.getRecipes(limit, skip)
+                listaRecipes = response.recipes ?: emptyList()
+                totalRecipes = response.total ?: 0
+            } else {
+                val response = servicio.searchRecipes(searchQuery)
+                listaRecipes = response.recipes ?: emptyList()
+                totalRecipes = response.total ?: 0
+                // Al buscar, reiniciamos a página 1 visualmente si quisiéramos, 
+                // pero DummyJSON devuelve todo en la búsqueda simple.
+            }
         } catch (e: Exception) {
             Log.e("RECIPES_UI", "Error: ${e.message}")
         } finally {
@@ -138,15 +147,43 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                     }
                     Text("Recetas", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
                 }
-                Text("    Inspiración para tu cocina", style = MaterialTheme.typography.bodyLarge, color = TextMuted, modifier = Modifier.padding(start = 40.dp))
+                
+                Spacer(Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    placeholder = { Text("Buscar receta...", color = TextMuted) },
+                    leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Primary) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Rounded.Close, null, tint = TextMuted)
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Primary,
+                        unfocusedBorderColor = Surface,
+                        focusedContainerColor = Surface,
+                        unfocusedContainerColor = Surface
+                    ),
+                    singleLine = true
+                )
             }
         },
         bottomBar = {
-            PaginationControls(
-                currentPage = currentPage,
-                totalPages = totalPages,
-                onPageChange = { currentPage = it }
-            )
+            if (searchQuery.isEmpty()) {
+                PaginationControls(
+                    currentPage = currentPage,
+                    totalPages = totalPages,
+                    onPageChange = { currentPage = it }
+                )
+            }
         },
         containerColor = Background
     ) { padding ->
