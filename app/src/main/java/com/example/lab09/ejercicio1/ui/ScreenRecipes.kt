@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -13,15 +14,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -85,21 +86,25 @@ fun ScreenRecipeMenu(navController: NavHostController) {
         Spacer(Modifier.height(16.dp))
         
         OutlinedButton(
-            onClick = { /* Otras opciones */ },
+            onClick = { navController.navigate("recetas_favoritos") },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(64.dp),
             shape = RoundedCornerShape(20.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
         ) {
-            Text("MIS FAVORITOS", color = Primary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Favorite, contentDescription = null, tint = Primary)
+                Spacer(Modifier.width(12.dp))
+                Text("MIS FAVORITOS", color = Primary)
+            }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService) {
+fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, favoritos: MutableList<Int>) {
     var listaRecipes by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -163,13 +168,79 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService) 
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(listaRecipes, key = { it.id ?: 0 }) { recipe ->
-                        RecipeCardPremium(recipe) {
-                            navController.navigate("recipeDetail/${recipe.id ?: 0}")
-                        }
+                        RecipeCardPremium(
+                            recipe = recipe,
+                            isFav = favoritos.contains(recipe.id),
+                            onFavToggle = {
+                                if (favoritos.contains(recipe.id)) favoritos.remove(recipe.id)
+                                else favoritos.add(recipe.id ?: 0)
+                            },
+                            onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
+                        )
                     }
                     item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
                         Spacer(Modifier.height(80.dp))
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService, favoritos: List<Int>) {
+    var listaFavoritos by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(favoritos.size) {
+        isLoading = true
+        val listado = mutableListOf<RecipeModel>()
+        favoritos.forEach { id ->
+            try {
+                val recipe = servicio.getRecipeById(id)
+                listado.add(recipe)
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+        listaFavoritos = listado
+        isLoading = false
+    }
+
+    Scaffold(
+        topBar = {
+            Column(modifier = Modifier.background(Background).padding(top = 24.dp, start = 8.dp, end = 24.dp, bottom = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Rounded.ArrowBack, null, tint = OnBackground)
+                    }
+                    Text("Mis Favoritos", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
+                }
+            }
+        },
+        containerColor = Background
+    ) { padding ->
+        if (isLoading) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Primary)
+            }
+        } else if (listaFavoritos.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Text("No tienes recetas favoritas aún", color = TextMuted)
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize().padding(padding)
+            ) {
+                items(listaFavoritos, key = { it.id ?: 0 }) { recipe ->
+                    RecipeCardPremium(
+                        recipe = recipe,
+                        isFav = true,
+                        onFavToggle = { /* En favoritos solo mostrar, o quitar si se desea */ },
+                        onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
+                    )
                 }
             }
         }
@@ -207,7 +278,12 @@ fun PaginationControls(currentPage: Int, totalPages: Int, onPageChange: (Int) ->
 }
 
 @Composable
-fun RecipeCardPremium(recipe: RecipeModel, onClick: () -> Unit) {
+fun RecipeCardPremium(
+    recipe: RecipeModel,
+    isFav: Boolean = false,
+    onFavToggle: () -> Unit = {},
+    onClick: () -> Unit
+) {
     Card(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Surface),
@@ -221,6 +297,23 @@ fun RecipeCardPremium(recipe: RecipeModel, onClick: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(28.dp)),
                     contentScale = ContentScale.Crop
                 )
+                
+                // Botón de Favorito
+                Surface(
+                    modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                    color = Color.Black.copy(alpha = 0.5f),
+                    shape = CircleShape
+                ) {
+                    IconButton(onClick = onFavToggle, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = null,
+                            tint = if (isFav) Color.Red else Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
                 Surface(
                     modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
                     color = Color.Black.copy(alpha = 0.6f),
@@ -260,7 +353,7 @@ fun RecipeCardPremium(recipe: RecipeModel, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScreenRecipeDetail(servicio: RecipeApiService, id: Int) {
+fun ScreenRecipeDetail(servicio: RecipeApiService, id: Int, favoritos: MutableList<Int>) {
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -274,6 +367,8 @@ fun ScreenRecipeDetail(servicio: RecipeApiService, id: Int) {
             CircularProgressIndicator(color = Primary) 
         }
     } else if (recipe != null) {
+        val isFav = favoritos.contains(recipe?.id)
+        
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(Background)) {
             Box {
                 Image(
@@ -284,12 +379,28 @@ fun ScreenRecipeDetail(servicio: RecipeApiService, id: Int) {
                 )
                 Box(modifier = Modifier.fillMaxWidth().height(400.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Background))))
                 
-                Surface(
-                    modifier = Modifier.align(Alignment.TopStart).padding(24.dp),
-                    color = Background.copy(alpha = 0.5f),
-                    shape = CircleShape
+                // Botones superiores en detalle
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Botón de volver simulado por el sistema de navegación
+                    Surface(color = Background.copy(alpha = 0.5f), shape = CircleShape) {
+                        // El botón de volver lo maneja el sistema o se puede añadir aquí
+                    }
+                    
+                    Surface(color = Background.copy(alpha = 0.5f), shape = CircleShape) {
+                        IconButton(onClick = {
+                            if (isFav) favoritos.remove(recipe?.id)
+                            else favoritos.add(recipe?.id ?: 0)
+                        }) {
+                            Icon(
+                                imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = null,
+                                tint = if (isFav) Color.Red else Color.White
+                            )
+                        }
+                    }
                 }
             }
             

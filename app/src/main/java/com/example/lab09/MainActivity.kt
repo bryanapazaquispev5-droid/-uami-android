@@ -37,6 +37,7 @@ import com.example.lab09.ejercicio1.remote.RecipeApiService
 import com.example.lab09.ejercicio1.ui.ScreenRecipeDetail
 import com.example.lab09.ejercicio1.ui.ScreenRecipes
 import com.example.lab09.ejercicio1.ui.ScreenRecipeMenu
+import com.example.lab09.ejercicio1.ui.ScreenFavorites
 import com.example.lab09.remote.PostApiService
 import com.example.lab09.ui.theme.*
 import retrofit2.Retrofit
@@ -78,12 +79,13 @@ fun ProgPrincipal9() {
     val servicioRecipes = retrofitRecipes.create(RecipeApiService::class.java)
 
     val navController = rememberNavController()
+    val favoritos = remember { mutableStateListOf<Int>() }
 
     Scaffold(
         bottomBar = { CustomBottomBar(navController) },
         containerColor = Background
     ) { paddingValues ->
-        Contenido(paddingValues, navController, servicioPosts, servicioRecipes)
+        Contenido(paddingValues, navController, servicioPosts, servicioRecipes, favoritos)
     }
 }
 
@@ -161,7 +163,8 @@ fun Contenido(
     pv: PaddingValues,
     navController: NavHostController,
     servicioPosts: PostApiService,
-    servicioRecipes: RecipeApiService
+    servicioRecipes: RecipeApiService,
+    favoritos: MutableList<Int>
 ) {
     Box(
         modifier = Modifier
@@ -181,12 +184,13 @@ fun Contenido(
                 ScreenPost(navController, servicioPosts, id)
             }
             composable("recetas") { ScreenRecipeMenu(navController) }
-            composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes) }
+            composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, favoritos) }
+            composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, favoritos) }
             composable("recipeDetail/{id}", arguments = listOf(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                ScreenRecipeDetail(servicioRecipes, id)
+                ScreenRecipeDetail(servicioRecipes, id, favoritos)
             }
         }
     }
