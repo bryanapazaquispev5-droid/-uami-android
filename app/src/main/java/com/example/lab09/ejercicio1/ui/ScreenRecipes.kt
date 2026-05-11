@@ -238,7 +238,11 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
                     RecipeCardPremium(
                         recipe = recipe,
                         isFav = true,
-                        onFavToggle = { /* En favoritos solo mostrar, o quitar si se desea */ },
+                        onFavToggle = {
+                            if (favoritos is MutableList) {
+                                (favoritos as MutableList<Int>).remove(recipe.id)
+                            }
+                        },
                         onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
                     )
                 }

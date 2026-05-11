@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,7 @@ import com.example.lab09.ejercicio1.ui.ScreenRecipeMenu
 import com.example.lab09.ejercicio1.ui.ScreenFavorites
 import com.example.lab09.remote.PostApiService
 import com.example.lab09.ui.theme.*
+import com.example.lab09.utils.FavoriteManager
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -79,7 +81,18 @@ fun ProgPrincipal9() {
     val servicioRecipes = retrofitRecipes.create(RecipeApiService::class.java)
 
     val navController = rememberNavController()
-    val favoritos = remember { mutableStateListOf<Int>() }
+    val context = LocalContext.current
+    val favoriteManager = remember { FavoriteManager(context) }
+    val favoritos = remember { 
+        mutableStateListOf<Int>().apply { 
+            addAll(favoriteManager.loadFavorites()) 
+        } 
+    }
+
+    // Persistir cambios automáticamente cada vez que la lista cambie
+    LaunchedEffect(favoritos.toList()) {
+        favoriteManager.saveFavorites(favoritos)
+    }
 
     Scaffold(
         bottomBar = { CustomBottomBar(navController) },
@@ -317,4 +330,3 @@ fun StatItem(value: String, label: String) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextMuted)
     }
 }
-
