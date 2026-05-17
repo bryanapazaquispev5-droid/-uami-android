@@ -217,6 +217,7 @@ fun ScreenInicio() {
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
+            .statusBarsPadding()
             .verticalScroll(scrollState)
             .padding(24.dp)
     ) {
