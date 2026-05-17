@@ -21,11 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
 import com.example.lab09.models.PostModel
 import com.example.lab09.remote.PostApiService
 import com.example.lab09.ui.theme.*
@@ -33,9 +35,15 @@ import com.example.lab09.ui.theme.*
 @Composable
 fun ScreenPosts(navController: NavHostController, servicio: PostApiService) {
     val listaPosts: SnapshotStateList<PostModel> = remember { mutableStateListOf() }
+    val nombresUsuarios = remember { mutableStateMapOf<Int, String>() }
     
     LaunchedEffect(Unit) {
         try {
+            // 1. Cargar usuarios para tener sus nombres
+            val usuarios = servicio.getUsers()
+            usuarios.forEach { nombresUsuarios[it.id] = it.name }
+            
+            // 2. Cargar los posts
             val listado = servicio.getUserPosts()
             listado.forEach { listaPosts.add(it) }
         } catch (e: Exception) {
@@ -56,7 +64,8 @@ fun ScreenPosts(navController: NavHostController, servicio: PostApiService) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(listaPosts) { item ->
-                PostCard(item) {
+                val nombreAutor = nombresUsuarios[item.userId] ?: "Cargando..."
+                PostCard(item, nombreAutor) {
                     navController.navigate("postsVer/${item.id}")
                 }
             }
@@ -65,7 +74,7 @@ fun ScreenPosts(navController: NavHostController, servicio: PostApiService) {
 }
 
 @Composable
-fun PostCard(post: PostModel, onClick: () -> Unit) {
+fun PostCard(post: PostModel, nombreAutor: String, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -75,19 +84,18 @@ fun PostCard(post: PostModel, onClick: () -> Unit) {
         tonalElevation = 2.dp
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = Primary.copy(alpha = 0.1f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Person, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-                }
-            }
+            AsyncImage(
+                model = "https://i.pravatar.cc/150?u=${post.userId}",
+                contentDescription = null,
+                modifier = Modifier
+                    .size(45.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
             Spacer(Modifier.width(16.dp))
             Column {
                 Text(
-                    text = "Usuario ${post.userId}",
+                    text = nombreAutor,
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = Primary)
                 )
                 Text(
@@ -111,9 +119,16 @@ fun PostCard(post: PostModel, onClick: () -> Unit) {
 @Composable
 fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: Int) {
     var post by remember { mutableStateOf<PostModel?>(null) }
+    var nombreAutor by remember { mutableStateOf("Cargando...") }
     
     LaunchedEffect(Unit) {
-        try { post = servicio.getUserPostById(id) } catch (e: Exception) { e.printStackTrace() }
+        try { 
+            val p = servicio.getUserPostById(id)
+            post = p
+            // Intentar buscar el nombre del autor por su ID
+            val usuarios = servicio.getUsers()
+            nombreAutor = usuarios.find { it.id == p.userId }?.name ?: "Desconocido"
+        } catch (e: Exception) { e.printStackTrace() }
     }
     
     Scaffold(
@@ -138,15 +153,18 @@ fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: I
             if (post != null) {
                 Column(modifier = Modifier.padding(24.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = CircleShape, color = Primary, modifier = Modifier.size(48.dp)) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Person, contentDescription = null, tint = OnPrimary)
-                            }
-                        }
+                        AsyncImage(
+                            model = "https://i.pravatar.cc/150?u=${post!!.userId}",
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
                         Spacer(Modifier.width(16.dp))
                         Column {
                             Text("Autor", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                            Text("Usuario ${post!!.userId}", style = MaterialTheme.typography.titleMedium, color = OnBackground)
+                            Text(nombreAutor, style = MaterialTheme.typography.titleMedium, color = OnBackground)
                         }
                     }
                     
@@ -178,7 +196,7 @@ fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: I
                     Row {
                         AssistChip(
                             onClick = {},
-                            label = { Text("ID: ${post!!.id}") },
+                            label = { Text("ID de Post: ${post!!.id}") },
                             leadingIcon = { Icon(Icons.Rounded.Tag, null, modifier = Modifier.size(16.dp)) },
                             colors = AssistChipDefaults.assistChipColors(labelColor = TextMuted)
                         )

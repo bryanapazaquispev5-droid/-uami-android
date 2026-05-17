@@ -1,6 +1,7 @@
 package com.example.lab09.remote
 
 import com.example.lab09.models.PostModel
+import com.example.lab09.models.UserModel
 import retrofit2.http.GET
 import retrofit2.http.Path
 
@@ -10,4 +11,7 @@ interface PostApiService {
 
     @GET("posts/{id}")
     suspend fun getUserPostById(@Path("id") id: Int): PostModel
+
+    @GET("users")
+    suspend fun getUsers(): List<UserModel>
 }

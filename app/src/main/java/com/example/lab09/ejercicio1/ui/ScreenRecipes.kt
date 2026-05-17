@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -112,7 +113,9 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
     var searchQuery by remember { mutableStateOf("") }
     val limit = 8
     var totalRecipes by remember { mutableIntStateOf(0) }
-    var sortOrder by remember { mutableStateOf("Default") } // "Default", "A-Z", "Z-A"
+    var sortOrder by remember { mutableStateOf("Default") } // "Default", "A-Z", "Z-A", "Rating", "Time", "Ingredients"
+    var selectedDifficulty by remember { mutableStateOf("All") } // "All", "Easy", "Medium", "Hard"
+    var selectedCuisine by remember { mutableStateOf("All") }
 
     LaunchedEffect(currentPage, isRefreshing, searchQuery) {
         isLoading = true
@@ -135,11 +138,24 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
         }
     }
 
-    val sortedRecipes = remember(listaRecipes, sortOrder) {
+    val filteredAndSortedRecipes = remember(listaRecipes, sortOrder, selectedDifficulty, selectedCuisine) {
+        var result = listaRecipes
+        
+        if (selectedDifficulty != "All") {
+            result = result.filter { it.difficulty?.equals(selectedDifficulty, ignoreCase = true) == true }
+        }
+        
+        if (selectedCuisine != "All") {
+            result = result.filter { it.cuisine?.equals(selectedCuisine, ignoreCase = true) == true }
+        }
+
         when (sortOrder) {
-            "A-Z" -> listaRecipes.sortedBy { it.name }
-            "Z-A" -> listaRecipes.sortedByDescending { it.name }
-            else -> listaRecipes
+            "A-Z" -> result.sortedBy { it.name }
+            "Z-A" -> result.sortedByDescending { it.name }
+            "Rating" -> result.sortedByDescending { it.rating }
+            "Time" -> result.sortedBy { (it.prepTimeMinutes ?: 0) + (it.cookTimeMinutes ?: 0) }
+            "Ingredients" -> result.sortedByDescending { it.ingredients?.size ?: 0 }
+            else -> result
         }
     }
 
@@ -190,6 +206,21 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                                 onClick = { sortOrder = "Z-A"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.SortByAlpha, null, tint = Primary) }
                             )
+                            DropdownMenuItem(
+                                text = { Text("Mejor valorados", color = OnSurface) },
+                                onClick = { sortOrder = "Rating"; showSortMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.Star, null, tint = Primary) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Menor tiempo", color = OnSurface) },
+                                onClick = { sortOrder = "Time"; showSortMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.Timer, null, tint = Primary) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Más ingredientes", color = OnSurface) },
+                                onClick = { sortOrder = "Ingredients"; showSortMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.Kitchen, null, tint = Primary) }
+                            )
                         }
                     }
                 }
@@ -220,6 +251,60 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                     ),
                     singleLine = true
                 )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Scrollable Cuisines
+                val cuisines = listOf("All", "Italian", "Mexican", "Asian", "Indian", "French", "American")
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    cuisines.forEach { cuisine ->
+                        val selected = selectedCuisine == cuisine
+                        FilterChip(
+                            selected = selected,
+                            onClick = { selectedCuisine = cuisine },
+                            label = { Text(if(cuisine == "All") "Cocina" else cuisine) },
+                            leadingIcon = { if(selected) Icon(Icons.Rounded.Check, null, Modifier.size(16.dp)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Secondary.copy(alpha = 0.2f),
+                                selectedLabelColor = Secondary,
+                                selectedLeadingIconColor = Secondary,
+                                containerColor = Surface,
+                                labelColor = TextMuted
+                            ),
+                            border = null,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Chips de Dificultad
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val difficulties = listOf("All", "Easy", "Medium", "Hard")
+                    difficulties.forEach { diff ->
+                        val selected = selectedDifficulty == diff
+                        FilterChip(
+                            selected = selected,
+                            onClick = { selectedDifficulty = diff },
+                            label = { Text(if(diff == "All") "Dificultad" else diff) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Primary,
+                                selectedLabelColor = OnPrimary,
+                                containerColor = Surface,
+                                labelColor = TextMuted
+                            ),
+                            border = null,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
             }
         },
         bottomBar = {
@@ -250,7 +335,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(sortedRecipes, key = { it.id ?: 0 }) { recipe ->
+                    items(filteredAndSortedRecipes, key = { it.id ?: 0 }) { recipe ->
                         RecipeCardPremium(
                             recipe = recipe,
                             isFav = favoritos.contains(recipe.id),
