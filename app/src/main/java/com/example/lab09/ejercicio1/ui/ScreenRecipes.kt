@@ -2,6 +2,7 @@ package com.example.lab09.ejercicio1.ui
 
 import android.util.Log
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -10,10 +11,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -33,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.example.lab09.utils.translateText
 import coil.compose.rememberAsyncImagePainter
 import com.example.lab09.ejercicio1.models.RecipeModel
 import com.example.lab09.ejercicio1.remote.RecipeApiService
@@ -105,31 +111,25 @@ fun ScreenRecipeMenu(navController: NavHostController) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, favoritos: MutableList<Int>) {
-    var listaRecipes by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
+fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, favoritos: MutableList<Int>, currentLanguage: MutableState<String>) {
+    var allRecipes by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     var currentPage by remember { mutableIntStateOf(1) }
     var searchQuery by remember { mutableStateOf("") }
     val limit = 8
-    var totalRecipes by remember { mutableIntStateOf(0) }
-    var sortOrder by remember { mutableStateOf("Default") } // "Default", "A-Z", "Z-A", "Rating", "Time", "Ingredients"
-    var selectedDifficulty by remember { mutableStateOf("All") } // "All", "Easy", "Medium", "Hard"
+    
+    var sortOrder by remember { mutableStateOf("Default") } 
+    var selectedDifficulty by remember { mutableStateOf("All") } 
     var selectedCuisine by remember { mutableStateOf("All") }
 
-    LaunchedEffect(currentPage, isRefreshing, searchQuery) {
+    // Cargar todas las recetas una sola vez o al refrescar
+    LaunchedEffect(isRefreshing) {
         isLoading = true
         try {
-            if (searchQuery.isEmpty()) {
-                val skip = (currentPage - 1) * limit
-                val response = servicio.getRecipes(limit, skip)
-                listaRecipes = response.recipes ?: emptyList()
-                totalRecipes = response.total ?: 0
-            } else {
-                val response = servicio.searchRecipes(searchQuery)
-                listaRecipes = response.recipes ?: emptyList()
-                totalRecipes = response.total ?: 0
-            }
+            // dummyjson permite limit=0 para obtener todos los registros
+            val response = servicio.getRecipes(limit = 0, skip = 0)
+            allRecipes = response.recipes ?: emptyList()
         } catch (e: Exception) {
             Log.e("RECIPES_UI", "Error: ${e.message}")
         } finally {
@@ -138,17 +138,34 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
         }
     }
 
-    val filteredAndSortedRecipes = remember(listaRecipes, sortOrder, selectedDifficulty, selectedCuisine) {
-        var result = listaRecipes
+    // Resetear a la página 1 cuando cambian los filtros o la búsqueda
+    LaunchedEffect(searchQuery, selectedDifficulty, selectedCuisine, sortOrder) {
+        currentPage = 1
+    }
+
+    // 1. Filtrar y Ordenar la lista completa
+    val filteredAndSortedRecipes = remember(allRecipes, searchQuery, sortOrder, selectedDifficulty, selectedCuisine) {
+        var result = allRecipes
         
+        // Búsqueda por texto
+        if (searchQuery.isNotEmpty()) {
+            result = result.filter { 
+                it.name?.contains(searchQuery, ignoreCase = true) == true ||
+                it.cuisine?.contains(searchQuery, ignoreCase = true) == true
+            }
+        }
+
+        // Filtro de Dificultad
         if (selectedDifficulty != "All") {
             result = result.filter { it.difficulty?.equals(selectedDifficulty, ignoreCase = true) == true }
         }
         
+        // Filtro de Cocina
         if (selectedCuisine != "All") {
             result = result.filter { it.cuisine?.equals(selectedCuisine, ignoreCase = true) == true }
         }
 
+        // Ordenamiento
         when (sortOrder) {
             "A-Z" -> result.sortedBy { it.name }
             "Z-A" -> result.sortedByDescending { it.name }
@@ -159,7 +176,17 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
         }
     }
 
-    val totalPages = if (totalRecipes > 0) (totalRecipes + limit - 1) / limit else 1
+    // 2. Calcular paginación sobre la lista filtrada
+    val totalFiltered = filteredAndSortedRecipes.size
+    val totalPages = if (totalFiltered > 0) (totalFiltered + limit - 1) / limit else 1
+    
+    // 3. Obtener solo las recetas de la página actual
+    val recipesToDisplay = remember(filteredAndSortedRecipes, currentPage) {
+        val start = (currentPage - 1) * limit
+        val end = minOf(start + limit, totalFiltered)
+        if (start < totalFiltered) filteredAndSortedRecipes.subList(start, end)
+        else emptyList()
+    }
 
     Scaffold(
         topBar = {
@@ -233,7 +260,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp),
-                    placeholder = { Text("Buscar receta...", color = TextMuted) },
+                    placeholder = { Text(if(currentLanguage.value == "es") "Buscar receta..." else "Search recipe...", color = TextMuted) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Primary) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -308,13 +335,11 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
             }
         },
         bottomBar = {
-            if (searchQuery.isEmpty()) {
-                PaginationControls(
-                    currentPage = currentPage,
-                    totalPages = totalPages,
-                    onPageChange = { currentPage = it }
-                )
-            }
+            PaginationControls(
+                currentPage = currentPage,
+                totalPages = totalPages,
+                onPageChange = { currentPage = it }
+            )
         },
         containerColor = Background
     ) { padding ->
@@ -327,6 +352,10 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Primary)
                 }
+            } else if (recipesToDisplay.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No se encontraron recetas", color = TextMuted)
+                }
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -335,7 +364,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(filteredAndSortedRecipes, key = { it.id ?: 0 }) { recipe ->
+                    items(recipesToDisplay, key = { it.id ?: 0 }) { recipe ->
                         RecipeCardPremium(
                             recipe = recipe,
                             isFav = favoritos.contains(recipe.id),
@@ -343,6 +372,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                                 if (favoritos.contains(recipe.id)) favoritos.remove(recipe.id)
                                 else favoritos.add(recipe.id ?: 0)
                             },
+                            currentLanguage = currentLanguage,
                             onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
                         )
                     }
@@ -356,7 +386,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
 }
 
 @Composable
-fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService, favoritos: List<Int>) {
+fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService, favoritos: List<Int>, currentLanguage: MutableState<String>) {
     var listaFavoritos by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -411,6 +441,7 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
                                 (favoritos as MutableList<Int>).remove(recipe.id)
                             }
                         },
+                        currentLanguage = currentLanguage,
                         onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
                     )
                 }
@@ -454,8 +485,10 @@ fun RecipeCardPremium(
     recipe: RecipeModel,
     isFav: Boolean = false,
     onFavToggle: () -> Unit = {},
+    currentLanguage: MutableState<String>,
     onClick: () -> Unit
 ) {
+    val lang = currentLanguage.value
     Card(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Surface),
@@ -500,13 +533,13 @@ fun RecipeCardPremium(
             }
             Column(Modifier.padding(16.dp)) {
                 Text(
-                    recipe.cuisine?.uppercase() ?: "VARIADA",
+                    translateText(recipe.cuisine, lang).uppercase(),
                     style = MaterialTheme.typography.labelSmall,
                     color = Primary,
                     fontWeight = FontWeight.Black
                 )
                 Text(
-                    recipe.name ?: "",
+                    translateText(recipe.name, lang),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -525,7 +558,7 @@ fun RecipeCardPremium(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScreenRecipeDetail(servicio: RecipeApiService, id: Int, favoritos: MutableList<Int>) {
+fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiService, id: Int, favoritos: MutableList<Int>, currentLanguage: MutableState<String>) {
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -557,8 +590,17 @@ fun ScreenRecipeDetail(servicio: RecipeApiService, id: Int, favoritos: MutableLi
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(color = Background.copy(alpha = 0.5f), shape = CircleShape) {
-                        // El botón de volver lo maneja el sistema o se puede añadir aquí
+                    Surface(
+                        onClick = { navController.popBackStack() },
+                        color = Background.copy(alpha = 0.5f), 
+                        shape = CircleShape
+                    ) {
+                        Icon(
+                            Icons.Rounded.ArrowBack, 
+                            null, 
+                            tint = Color.White, 
+                            modifier = Modifier.padding(8.dp)
+                        )
                     }
                     
                     Surface(color = Background.copy(alpha = 0.5f), shape = CircleShape) {
@@ -577,16 +619,36 @@ fun ScreenRecipeDetail(servicio: RecipeApiService, id: Int, favoritos: MutableLi
             }
             
             Column(modifier = Modifier.offset(y = (-40).dp).padding(horizontal = 24.dp)) {
-                Surface(color = Primary, shape = RoundedCornerShape(12.dp)) {
-                    Text(
-                        recipe?.cuisine ?: "Internacional",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = OnPrimary)
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(color = Primary, shape = RoundedCornerShape(12.dp)) {
+                        Text(
+                            recipe?.cuisine ?: "Internacional",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = OnPrimary)
+                        )
+                    }
+
+                    Button(
+                        onClick = { navController.navigate("cookingMode/${recipe?.id}") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Secondary),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.OutdoorGrill, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("MODO COCINA", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                        }
+                    }
                 }
+
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    recipe?.name ?: "",
+                    translateText(recipe?.name, currentLanguage.value),
                     style = MaterialTheme.typography.headlineMedium,
                     color = OnBackground
                 )
@@ -594,22 +656,461 @@ fun ScreenRecipeDetail(servicio: RecipeApiService, id: Int, favoritos: MutableLi
                 Spacer(Modifier.height(32.dp))
                 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    DetailBadge(Icons.Rounded.Timer, "Tiempo", "${recipe?.prepTimeMinutes!! + recipe?.cookTimeMinutes!!}m")
-                    DetailBadge(Icons.Rounded.SignalCellularAlt, "Nivel", recipe?.difficulty ?: "Medio")
-                    DetailBadge(Icons.Rounded.LocalFireDepartment, "Calorías", "450 kcal")
+                    val isEs = currentLanguage.value == "es"
+                    DetailBadge(Icons.Rounded.Timer, if(isEs) "Tiempo" else "Time", "${(recipe?.prepTimeMinutes ?: 0) + (recipe?.cookTimeMinutes ?: 0)}m")
+                    DetailBadge(Icons.Rounded.SignalCellularAlt, if(isEs) "Nivel" else "Level", translateText(recipe?.difficulty, currentLanguage.value))
+                    DetailBadge(Icons.Rounded.LocalFireDepartment, if(isEs) "Calorías" else "Calories", "450 kcal")
                 }
                 
                 Spacer(Modifier.height(40.dp))
                 
-                SectionTitle("Ingredientes")
-                recipe?.ingredients?.forEach { IngredientRow(it) }
+                SectionTitle(if(currentLanguage.value == "es") "Ingredientes" else "Ingredients")
+                recipe?.ingredients?.forEach { IngredientRow(translateText(it, currentLanguage.value)) }
                 
                 Spacer(Modifier.height(40.dp))
                 
-                SectionTitle("Preparación")
-                recipe?.instructions?.forEachIndexed { i, s -> StepRow(i + 1, s) }
+                SectionTitle(if(currentLanguage.value == "es") "Preparación" else "Preparation")
+                recipe?.instructions?.forEachIndexed { i, s -> StepRow(i + 1, translateText(s, currentLanguage.value)) }
                 
                 Spacer(Modifier.height(100.dp))
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun ScreenCookingMode(
+    navController: NavHostController, 
+    servicio: RecipeApiService, 
+    id: Int,
+    tts: android.speech.tts.TextToSpeech?,
+    onSpeechFinished: MutableState<(() -> Unit)?>,
+    currentLanguage: MutableState<String>
+) {
+    var recipe by remember { mutableStateOf<RecipeModel?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(id) {
+        try { recipe = servicio.getRecipeById(id) } catch (e: Exception) { e.printStackTrace() }
+        finally { isLoading = false }
+    }
+
+    if (isLoading) {
+        Box(Modifier.fillMaxSize().background(Background), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Primary)
+        }
+    } else if (recipe != null) {
+        val instructions = recipe?.instructions ?: emptyList()
+        val ingredients = recipe?.ingredients ?: emptyList()
+        val pagerState = rememberPagerState(pageCount = { instructions.size + 1 })
+
+        val frasesMotivacionales = if (currentLanguage.value == "es") {
+            listOf(
+                "¡Hoy vas a crear una obra maestra!",
+                "El ingrediente secreto siempre es el amor.",
+                "¡A cocinar se ha dicho, Chef!",
+                "Tu cocina, tus reglas. ¡A disfrutar!",
+                "Huele a que algo delicioso está en camino."
+            )
+        } else {
+            listOf(
+                "Today you are going to create a masterpiece!",
+                "The secret ingredient is always love.",
+                "Let's get cooking, Chef!",
+                "Your kitchen, your rules. Enjoy!",
+                "It smells like something delicious is on the way."
+            )
+        }
+        val fraseBienvenida = remember { frasesMotivacionales.random() }
+
+        // Control de Narración Automática
+        LaunchedEffect(pagerState.currentPage, currentLanguage.value) {
+            tts?.stop()
+            val index = pagerState.currentPage
+            val isEs = currentLanguage.value == "es"
+            
+            if (index == 0) {
+                val intro = if (isEs) {
+                    "$fraseBienvenida. Empecemos revisando los ingredientes."
+                } else {
+                    "$fraseBienvenida. Let's start by reviewing the ingredients."
+                }
+                tts?.speak(intro, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+            } else {
+                val paso = index
+                val total = instructions.size
+                val textoInstruccion = instructions[index - 1]
+                
+                val transicion = if (isEs) {
+                    when(paso) {
+                        1 -> "¡Muy bien! Empecemos con el primer paso. "
+                        total -> "¡Ya casi terminamos! El último paso es: "
+                        else -> "Siguiente paso, número $paso. "
+                    }
+                } else {
+                    when(paso) {
+                        1 -> "Alright! Let's start with the first step. "
+                        total -> "Almost done! The final step is: "
+                        else -> "Next step, number $paso. "
+                    }
+                }
+                
+                tts?.speak("$transicion $textoInstruccion", android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+            }
+        }
+
+        Column(modifier = Modifier.fillMaxSize().background(Background)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { 
+                    tts?.stop()
+                    navController.popBackStack() 
+                }) {
+                    Icon(Icons.Rounded.Close, null, tint = OnBackground)
+                }
+                Column {
+                    Text(
+                        if (currentLanguage.value == "es") "Modo Cocina" else "Cooking Mode", 
+                        style = MaterialTheme.typography.labelSmall, 
+                        color = Primary
+                    )
+                    Text(
+                        translateText(recipe?.name, currentLanguage.value),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = OnBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Pager
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 32.dp),
+                pageSpacing = 16.dp
+            ) { pageIndex ->
+                if (pageIndex == 0) {
+                    ShoppingListCard(ingredients, tts, pagerState, onSpeechFinished, currentLanguage)
+                } else {
+                    CookingStepCard(
+                        stepNumber = pageIndex,
+                        instruction = translateText(instructions[pageIndex - 1], currentLanguage.value),
+                        totalSteps = instructions.size,
+                        tts = tts,
+                        currentLanguage = currentLanguage
+                    )
+                }
+            }
+
+            // Footer / Progress
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp, top = 16.dp).navigationBarsPadding(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(instructions.size + 1) { index ->
+                    val color = if (pagerState.currentPage == index) Primary else Surface
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .size(if (pagerState.currentPage == index) 10.dp else 6.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun ShoppingListCard(
+    ingredients: List<String>, 
+    tts: android.speech.tts.TextToSpeech? = null,
+    pagerState: androidx.compose.foundation.pager.PagerState? = null,
+    onSpeechFinished: MutableState<(() -> Unit)?>? = null,
+    currentLanguage: MutableState<String>
+) {
+    val checkedState = remember { mutableStateMapOf<Int, Boolean>() }
+    val scope = rememberCoroutineScope()
+    val isEs = currentLanguage.value == "es"
+    
+    val frasesCompletado = if (isEs) {
+        listOf("¡Listo!", "Entendido.", "Ya lo tenemos.", "Perfecto.")
+    } else {
+        listOf("Got it!", "Checked.", "Ready.", "Done.")
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize().padding(vertical = 32.dp),
+        color = Surface,
+        shape = RoundedCornerShape(32.dp),
+        tonalElevation = 4.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.ShoppingCart, null, tint = Primary, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    if (isEs) "LISTA DE COMPRAS" else "SHOPPING LIST",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                    color = OnSurface
+                )
+            }
+            
+            Text(
+                if (isEs) "Marca los ingredientes que ya tienes" else "Mark the ingredients you already have",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+                modifier = Modifier.padding(bottom = 24.dp, top = 4.dp)
+            )
+
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(ingredients.size) { index ->
+                    val isChecked = checkedState[index] ?: false
+                    IngredientCheckItem(
+                        text = translateText(ingredients[index], currentLanguage.value),
+                        isChecked = isChecked,
+                        onCheckedChange = { nuevoEstado -> 
+                            checkedState[index] = nuevoEstado
+                            if (nuevoEstado) {
+                                val frase = frasesCompletado.random()
+                                tts?.speak(frase, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                            }
+                        }
+                    )
+                }
+            }
+            
+            Spacer(Modifier.height(16.dp))
+            
+            val totalChecked = checkedState.values.count { it }
+            val completado = if (ingredients.isNotEmpty()) totalChecked == ingredients.size else false
+            
+            // Si termina todo, que lo celebre y pase de página automáticamente
+            LaunchedEffect(completado) {
+                if (completado) {
+                    delay(500)
+                    
+                    onSpeechFinished?.value = {
+                        scope.launch {
+                            delay(500)
+                            pagerState?.animateScrollToPage(1)
+                        }
+                    }
+                    
+                    val congrats = if (isEs) {
+                        "¡Excelente! Ya tenemos todos los ingredientes listos. Empecemos a cocinar."
+                    } else {
+                        "Excellent! We have all the ingredients ready. Let's start cooking."
+                    }
+
+                    tts?.speak(
+                        congrats,
+                        android.speech.tts.TextToSpeech.QUEUE_FLUSH,
+                        android.os.Bundle().apply { 
+                            putString(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "FINAL_SHOPPING") 
+                        },
+                        "FINAL_SHOPPING"
+                    )
+                }
+            }
+
+            LinearProgressIndicator(
+                progress = { if (ingredients.isNotEmpty()) totalChecked.toFloat() / ingredients.size else 0f },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                color = if (completado) Secondary else Primary,
+                trackColor = Background
+            )
+            Text(
+                if (isEs) "Progreso: $totalChecked de ${ingredients.size}" else "Progress: $totalChecked of ${ingredients.size}",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                modifier = Modifier.padding(top = 8.dp).align(Alignment.End)
+            )
+        }
+    }
+}
+
+@Composable
+fun IngredientCheckItem(text: String, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Surface(
+        onClick = { onCheckedChange(!isChecked) },
+        color = if (isChecked) Secondary.copy(alpha = 0.1f) else Background.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            1.dp, 
+            if (isChecked) Secondary.copy(alpha = 0.5f) else Color.Transparent
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = isChecked,
+                onCheckedChange = onCheckedChange,
+                colors = CheckboxDefaults.colors(
+                    checkedColor = Secondary,
+                    uncheckedColor = TextMuted,
+                    checkmarkColor = OnPrimary
+                )
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    textDecoration = if (isChecked) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                ),
+                color = if (isChecked) TextMuted else OnSurface
+            )
+        }
+    }
+}
+
+@Composable
+fun CookingStepCard(
+    stepNumber: Int, 
+    instruction: String, 
+    totalSteps: Int,
+    tts: android.speech.tts.TextToSpeech? = null,
+    currentLanguage: MutableState<String>
+) {
+    val isEs = currentLanguage.value == "es"
+    
+    Surface(
+        modifier = Modifier.fillMaxSize().padding(vertical = 32.dp),
+        color = Surface,
+        shape = RoundedCornerShape(32.dp),
+        tonalElevation = 4.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp).verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = Primary.copy(alpha = 0.1f),
+                    shape = CircleShape,
+                    border = androidx.compose.foundation.BorderStroke(2.dp, Primary)
+                ) {
+                    Text(
+                        if (isEs) "PASO $stepNumber / $totalSteps" else "STEP $stepNumber / $totalSteps",
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Black),
+                        color = Primary
+                    )
+                }
+
+                // Indicador visual de narración activa
+                Icon(
+                    Icons.Rounded.RecordVoiceOver,
+                    null,
+                    tint = Primary.copy(alpha = 0.6f),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(Modifier.height(48.dp))
+
+            Text(
+                text = instruction,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    lineHeight = 42.sp,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = OnSurface,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(48.dp))
+
+            // Lógica de temporizador si se detectan minutos en el texto
+            val minutes = remember(instruction) {
+                val regex = """(\d+)\s*(minutos|min|minutes)""".toRegex(RegexOption.IGNORE_CASE)
+                regex.find(instruction)?.groupValues?.get(1)?.toIntOrNull()
+            }
+
+            if (minutes != null) {
+                CookingTimer(minutes, currentLanguage)
+            }
+        }
+    }
+}
+
+@Composable
+fun CookingTimer(initialMinutes: Int, currentLanguage: MutableState<String>) {
+    val isEs = currentLanguage.value == "es"
+    var timeLeft by remember { mutableIntStateOf(initialMinutes * 60) }
+    var isRunning by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isRunning, timeLeft) {
+        if (isRunning && timeLeft > 0) {
+            kotlinx.coroutines.delay(1000L)
+            timeLeft -= 1
+        } else if (timeLeft == 0) {
+            isRunning = false
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Background.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        val minutes = timeLeft / 60
+        val seconds = timeLeft % 60
+        Text(
+            text = String.format("%02d:%02d", minutes, seconds),
+            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
+            color = if (timeLeft == 0) Secondary else Primary
+        )
+        Text(
+            text = if (timeLeft == 0) (if (isEs) "¡LISTO!" else "DONE!") else (if (isEs) "TEMPORIZADOR" else "TIMER"),
+            style = MaterialTheme.typography.labelSmall,
+            color = TextMuted
+        )
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = { isRunning = !isRunning },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isRunning) Color.Red.copy(alpha = 0.2f) else Secondary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(if (isRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (isRunning) (if (isEs) "PAUSAR" else "PAUSE") else (if (isEs) "INICIAR" else "START"))
+            }
+            
+            OutlinedButton(
+                onClick = { 
+                    timeLeft = initialMinutes * 60
+                    isRunning = false
+                },
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
             }
         }
     }

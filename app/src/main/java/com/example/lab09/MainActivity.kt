@@ -45,10 +45,19 @@ import com.example.lab09.utils.FavoriteManager
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-class MainActivity : ComponentActivity() {
+import android.speech.tts.TextToSpeech
+import java.util.Locale
+
+class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
+    private var tts: TextToSpeech? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // Inicializar TTS
+        tts = TextToSpeech(this, this)
+
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -62,14 +71,74 @@ class MainActivity : ComponentActivity() {
                 ),
                 typography = AppTypography
             ) {
-                ProgPrincipal9()
+                ProgPrincipal9(tts)
             }
         }
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            val localeES = Locale("es", "ES")
+            tts?.language = localeES
+            
+            // Intentar buscar una voz de alta calidad (network voice)
+            try {
+                val voices = tts?.voices
+                val bestVoice = voices?.find { 
+                    it.locale.language == "es" && it.name.contains("network", true) 
+                } ?: voices?.find { it.locale.language == "es" }
+                
+                bestVoice?.let { tts?.voice = it }
+            } catch (e: Exception) {
+                // Si falla la selección de voz avanzada, se queda con la por defecto
+            }
+
+            // Ajustes para que suene menos robótico
+            tts?.setPitch(1.05f)        // Un poquito más agudo para que suene amigable
+            tts?.setSpeechRate(0.95f)    // Un poquito más lento para que se entienda mejor
+        }
+    }
+
+    override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+        super.onDestroy()
     }
 }
 
 @Composable
-fun ProgPrincipal9() {
+fun ProgPrincipal9(tts: TextToSpeech?) {
+    val onSpeechFinished = remember { mutableStateOf<(() -> Unit)?>(null) }
+    val currentLanguage = remember { mutableStateOf("es") } // "es" o "en"
+    
+    // Configurar listener de TTS
+    LaunchedEffect(tts) {
+        tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == "FINAL_SHOPPING") {
+                    onSpeechFinished.value?.invoke()
+                }
+            }
+            override fun onError(utteranceId: String?) {}
+        })
+    }
+
+    // Cambiar idioma del TTS cuando cambie el estado
+    LaunchedEffect(currentLanguage.value) {
+        val locale = if (currentLanguage.value == "es") Locale("es", "ES") else Locale.US
+        tts?.language = locale
+        
+        // Re-seleccionar voz para el nuevo idioma
+        try {
+            val voices = tts?.voices
+            val bestVoice = voices?.find { 
+                it.locale.language == currentLanguage.value && it.name.contains("network", true) 
+            } ?: voices?.find { it.locale.language == currentLanguage.value }
+            bestVoice?.let { tts?.voice = it }
+        } catch (e: Exception) {}
+    }
+
     val urlBasePosts = "https://json-placeholder.mock.beeceptor.com/"
     val retrofitPosts = Retrofit.Builder().baseUrl(urlBasePosts)
         .addConverterFactory(GsonConverterFactory.create()).build()
@@ -96,9 +165,48 @@ fun ProgPrincipal9() {
 
     Scaffold(
         bottomBar = { CustomBottomBar(navController) },
+        topBar = { LanguageToggle(currentLanguage) },
         containerColor = Background
     ) { paddingValues ->
-        Contenido(paddingValues, navController, servicioPosts, servicioRecipes, favoritos)
+        Contenido(paddingValues, navController, servicioPosts, servicioRecipes, favoritos, tts, onSpeechFinished, currentLanguage)
+    }
+}
+
+@Composable
+fun LanguageToggle(currentLanguage: MutableState<String>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            color = Surface,
+            shape = RoundedCornerShape(12.dp),
+            onClick = { 
+                currentLanguage.value = if (currentLanguage.value == "es") "en" else "es" 
+            }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Rounded.Language, 
+                    null, 
+                    tint = Primary, 
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (currentLanguage.value == "es") "ESPAÑOL" else "ENGLISH",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = OnSurface
+                )
+            }
+        }
     }
 }
 
@@ -177,7 +285,10 @@ fun Contenido(
     navController: NavHostController,
     servicioPosts: PostApiService,
     servicioRecipes: RecipeApiService,
-    favoritos: MutableList<Int>
+    favoritos: MutableList<Int>,
+    tts: android.speech.tts.TextToSpeech?,
+    onSpeechFinished: MutableState<(() -> Unit)?>,
+    currentLanguage: MutableState<String>
 ) {
     Box(
         modifier = Modifier
@@ -197,13 +308,19 @@ fun Contenido(
                 ScreenPost(navController, servicioPosts, id)
             }
             composable("recetas") { ScreenRecipeMenu(navController) }
-            composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, favoritos) }
-            composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, favoritos) }
+            composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, favoritos, currentLanguage) }
+            composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, favoritos, currentLanguage) }
             composable("recipeDetail/{id}", arguments = listOf(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                ScreenRecipeDetail(servicioRecipes, id, favoritos)
+                ScreenRecipeDetail(navController, servicioRecipes, id, favoritos, currentLanguage)
+            }
+            composable("cookingMode/{id}", arguments = listOf(
+                navArgument("id") { type = NavType.IntType }
+            )) {
+                val id = it.arguments?.getInt("id") ?: 0
+                com.example.lab09.ejercicio1.ui.ScreenCookingMode(navController, servicioRecipes, id, tts, onSpeechFinished, currentLanguage)
             }
         }
     }
