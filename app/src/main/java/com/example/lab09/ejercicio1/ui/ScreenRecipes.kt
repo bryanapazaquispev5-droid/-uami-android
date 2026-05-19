@@ -39,13 +39,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.lab09.utils.translateText
+import com.example.lab09.utils.translateRecipesListAsync
+import com.example.lab09.utils.translateRecipeAsync
 import coil.compose.rememberAsyncImagePainter
 import com.example.lab09.ejercicio1.models.RecipeModel
 import com.example.lab09.ejercicio1.remote.RecipeApiService
 import com.example.lab09.ui.theme.*
 
 @Composable
-fun ScreenRecipeMenu(navController: NavHostController) {
+fun ScreenRecipeMenu(navController: NavHostController, currentLanguage: MutableState<String>) {
+    val isEs = currentLanguage.value == "es"
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -62,12 +65,12 @@ fun ScreenRecipeMenu(navController: NavHostController) {
         )
         Spacer(Modifier.height(24.dp))
         Text(
-            "Libro de Cocina",
+            if (isEs) "Libro de Cocina" else "Cookbook",
             style = MaterialTheme.typography.headlineMedium,
             color = OnBackground
         )
         Text(
-            "Explora cientos de recetas profesionales",
+            if (isEs) "Explora cientos de recetas profesionales" else "Explore hundreds of professional recipes",
             style = MaterialTheme.typography.bodyLarge,
             color = TextMuted,
             textAlign = TextAlign.Center
@@ -86,7 +89,11 @@ fun ScreenRecipeMenu(navController: NavHostController) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.MenuBook, contentDescription = null, tint = OnPrimary)
                 Spacer(Modifier.width(12.dp))
-                Text("VER TODAS LAS RECETAS", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = OnPrimary)
+                Text(
+                    if (isEs) "VER TODAS LAS RECETAS" else "VIEW ALL RECIPES", 
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), 
+                    color = OnPrimary
+                )
             }
         }
         
@@ -103,7 +110,7 @@ fun ScreenRecipeMenu(navController: NavHostController) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Favorite, contentDescription = null, tint = Primary)
                 Spacer(Modifier.width(12.dp))
-                Text("MIS FAVORITOS", color = Primary)
+                Text(if (isEs) "MIS FAVORITOS" else "MY FAVORITES", color = Primary)
             }
         }
     }
@@ -112,6 +119,7 @@ fun ScreenRecipeMenu(navController: NavHostController) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, favoritos: MutableList<Int>, currentLanguage: MutableState<String>) {
+    val isEs = currentLanguage.value == "es"
     var allRecipes by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -124,12 +132,18 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
     var selectedCuisine by remember { mutableStateOf("All") }
 
     // Cargar todas las recetas una sola vez o al refrescar
-    LaunchedEffect(isRefreshing) {
+    LaunchedEffect(isRefreshing, currentLanguage.value) {
         isLoading = true
         try {
             // dummyjson permite limit=0 para obtener todos los registros
             val response = servicio.getRecipes(limit = 0, skip = 0)
-            allRecipes = response.recipes ?: emptyList()
+            val rawRecipes = response.recipes ?: emptyList()
+            
+            if (currentLanguage.value == "es") {
+                allRecipes = translateRecipesListAsync(rawRecipes, "es")
+            } else {
+                allRecipes = rawRecipes
+            }
         } catch (e: Exception) {
             Log.e("RECIPES_UI", "Error: ${e.message}")
         } finally {
@@ -200,7 +214,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                         IconButton(onClick = { navController.popBackStack() }) {
                             Icon(Icons.Rounded.ArrowBack, null, tint = OnBackground)
                         }
-                        Text("Recetas", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
+                        Text(if (isEs) "Recetas" else "Recipes", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
                     }
                     
                     // Menú de Filtro
@@ -219,48 +233,48 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                             modifier = Modifier.background(Surface)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Por defecto", color = OnSurface) },
+                                text = { Text(if (isEs) "Por defecto" else "Default", color = OnSurface) },
                                 onClick = { sortOrder = "Default"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.Sort, null, tint = Primary) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Nombre A-Z", color = OnSurface) },
+                                text = { Text(if (isEs) "Nombre A-Z" else "Name A-Z", color = OnSurface) },
                                 onClick = { sortOrder = "A-Z"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.SortByAlpha, null, tint = Primary) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Nombre Z-A", color = OnSurface) },
+                                text = { Text(if (isEs) "Nombre Z-A" else "Name Z-A", color = OnSurface) },
                                 onClick = { sortOrder = "Z-A"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.SortByAlpha, null, tint = Primary) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Mejor valorados", color = OnSurface) },
+                                text = { Text(if (isEs) "Mejor valorados" else "Top Rated", color = OnSurface) },
                                 onClick = { sortOrder = "Rating"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.Star, null, tint = Primary) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Menor tiempo", color = OnSurface) },
+                                text = { Text(if (isEs) "Menor tiempo" else "Fastest", color = OnSurface) },
                                 onClick = { sortOrder = "Time"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.Timer, null, tint = Primary) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Más ingredientes", color = OnSurface) },
+                                text = { Text(if (isEs) "Más ingredientes" else "Most Ingredients", color = OnSurface) },
                                 onClick = { sortOrder = "Ingredients"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.Kitchen, null, tint = Primary) }
                             )
                         }
                     }
                 }
-                
+
                 Spacer(Modifier.height(16.dp))
-                
+
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp),
-                    placeholder = { Text(if(currentLanguage.value == "es") "Buscar receta..." else "Search recipe...", color = TextMuted) },
+                    placeholder = { Text(if(isEs) "Buscar receta..." else "Search recipe...", color = TextMuted) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Primary) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -292,7 +306,10 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                         FilterChip(
                             selected = selected,
                             onClick = { selectedCuisine = cuisine },
-                            label = { Text(if(cuisine == "All") "Cocina" else cuisine) },
+                            label = { 
+                                val labelText = if(cuisine == "All") (if(isEs) "Cocinas" else "Cuisines") else translateText(cuisine, currentLanguage.value)
+                                Text(labelText) 
+                            },
                             leadingIcon = { if(selected) Icon(Icons.Rounded.Check, null, Modifier.size(16.dp)) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Secondary.copy(alpha = 0.2f),
@@ -320,7 +337,10 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                         FilterChip(
                             selected = selected,
                             onClick = { selectedDifficulty = diff },
-                            label = { Text(if(diff == "All") "Dificultad" else diff) },
+                            label = { 
+                                val labelText = if(diff == "All") (if(isEs) "Dificultad" else "Difficulty") else translateText(diff, currentLanguage.value)
+                                Text(labelText) 
+                            },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Primary,
                                 selectedLabelColor = OnPrimary,
@@ -338,6 +358,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
             PaginationControls(
                 currentPage = currentPage,
                 totalPages = totalPages,
+                currentLanguage = currentLanguage,
                 onPageChange = { currentPage = it }
             )
         },
@@ -369,8 +390,11 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                             recipe = recipe,
                             isFav = favoritos.contains(recipe.id),
                             onFavToggle = {
-                                if (favoritos.contains(recipe.id)) favoritos.remove(recipe.id)
-                                else favoritos.add(recipe.id ?: 0)
+                                if (favoritos.contains(recipe.id)) {
+                                    recipe.id?.let { favoritos.remove(it) }
+                                } else {
+                                    favoritos.add(recipe.id ?: 0)
+                                }
                             },
                             currentLanguage = currentLanguage,
                             onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
@@ -387,19 +411,25 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
 
 @Composable
 fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService, favoritos: List<Int>, currentLanguage: MutableState<String>) {
+    val isEs = currentLanguage.value == "es"
     var listaFavoritos by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(favoritos.size) {
+    LaunchedEffect(favoritos.size, currentLanguage.value) {
         isLoading = true
-        val listado = mutableListOf<RecipeModel>()
+        val listadoRaw = mutableListOf<RecipeModel>()
         favoritos.forEach { id ->
             try {
                 val recipe = servicio.getRecipeById(id)
-                listado.add(recipe)
+                listadoRaw.add(recipe)
             } catch (e: Exception) { e.printStackTrace() }
         }
-        listaFavoritos = listado
+        
+        listaFavoritos = if (currentLanguage.value == "es") {
+            translateRecipesListAsync(listadoRaw, "es")
+        } else {
+            listadoRaw
+        }
         isLoading = false
     }
 
@@ -410,7 +440,7 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Rounded.ArrowBack, null, tint = OnBackground)
                     }
-                    Text("Mis Favoritos", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
+                    Text(if (isEs) "Mis Favoritos" else "My Favorites", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
                 }
             }
         },
@@ -422,7 +452,7 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
             }
         } else if (listaFavoritos.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("No tienes recetas favoritas aún", color = TextMuted)
+                Text(if (isEs) "No tienes recetas favoritas aún" else "You don't have favorite recipes yet", color = TextMuted)
             }
         } else {
             LazyVerticalGrid(
@@ -438,7 +468,7 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
                         isFav = true,
                         onFavToggle = {
                             if (favoritos is MutableList) {
-                                (favoritos as MutableList<Int>).remove(recipe.id)
+                                recipe.id?.let { (favoritos as MutableList<Int>).remove(it) }
                             }
                         },
                         currentLanguage = currentLanguage,
@@ -451,7 +481,8 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
 }
 
 @Composable
-fun PaginationControls(currentPage: Int, totalPages: Int, onPageChange: (Int) -> Unit) {
+fun PaginationControls(currentPage: Int, totalPages: Int, currentLanguage: MutableState<String>, onPageChange: (Int) -> Unit) {
+    val isEs = currentLanguage.value == "es"
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
         color = Surface,
@@ -469,7 +500,11 @@ fun PaginationControls(currentPage: Int, totalPages: Int, onPageChange: (Int) ->
                 modifier = Modifier.background(if (currentPage > 1) Primary else Background, CircleShape)
             ) { Icon(Icons.Rounded.ChevronLeft, null, tint = if (currentPage > 1) OnPrimary else TextMuted) }
 
-            Text("Página $currentPage de $totalPages", style = MaterialTheme.typography.labelLarge, color = OnSurface)
+            Text(
+                if (isEs) "Página $currentPage de $totalPages" else "Page $currentPage of $totalPages", 
+                style = MaterialTheme.typography.labelLarge, 
+                color = OnSurface
+            )
 
             IconButton(
                 onClick = { if (currentPage < totalPages) onPageChange(currentPage + 1) },
@@ -562,8 +597,16 @@ fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiServ
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(id) {
-        try { recipe = servicio.getRecipeById(id) } catch (e: Exception) { e.printStackTrace() }
+    LaunchedEffect(id, currentLanguage.value) {
+        isLoading = true
+        try { 
+            val rawRecipe = servicio.getRecipeById(id)
+            if (currentLanguage.value == "es") {
+                recipe = translateRecipeAsync(rawRecipe, "es")
+            } else {
+                recipe = rawRecipe
+            }
+        } catch (e: Exception) { e.printStackTrace() }
         finally { isLoading = false }
     }
 
@@ -691,8 +734,16 @@ fun ScreenCookingMode(
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(id) {
-        try { recipe = servicio.getRecipeById(id) } catch (e: Exception) { e.printStackTrace() }
+    LaunchedEffect(id, currentLanguage.value) {
+        isLoading = true
+        try { 
+            val rawRecipe = servicio.getRecipeById(id)
+            if (currentLanguage.value == "es") {
+                recipe = translateRecipeAsync(rawRecipe, "es")
+            } else {
+                recipe = rawRecipe
+            }
+        } catch (e: Exception) { e.printStackTrace() }
         finally { isLoading = false }
     }
 
@@ -779,7 +830,7 @@ fun ScreenCookingMode(
                         color = Primary
                     )
                     Text(
-                        translateText(recipe?.name, currentLanguage.value),
+                        recipe?.name ?: "",
                         style = MaterialTheme.typography.titleMedium,
                         color = OnBackground,
                         maxLines = 1,
@@ -800,7 +851,7 @@ fun ScreenCookingMode(
                 } else {
                     CookingStepCard(
                         stepNumber = pageIndex,
-                        instruction = translateText(instructions[pageIndex - 1], currentLanguage.value),
+                        instruction = instructions[pageIndex - 1],
                         totalSteps = instructions.size,
                         tts = tts,
                         currentLanguage = currentLanguage
@@ -881,7 +932,7 @@ fun ShoppingListCard(
                 items(ingredients.size) { index ->
                     val isChecked = checkedState[index] ?: false
                     IngredientCheckItem(
-                        text = translateText(ingredients[index], currentLanguage.value),
+                        text = ingredients[index],
                         isChecked = isChecked,
                         onCheckedChange = { nuevoEstado -> 
                             checkedState[index] = nuevoEstado

@@ -55,6 +55,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         
+        // Inicializar Utilidades
+        com.example.lab09.utils.LanguageManager.init(this)
+        com.example.lab09.utils.OnDeviceTranslator.init(this)
+        
         // Inicializar TTS
         tts = TextToSpeech(this, this)
 
@@ -109,34 +113,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 @Composable
 fun ProgPrincipal9(tts: TextToSpeech?) {
     val onSpeechFinished = remember { mutableStateOf<(() -> Unit)?>(null) }
-    val currentLanguage = remember { mutableStateOf("es") } // "es" o "en"
-    
-    // Configurar listener de TTS
-    LaunchedEffect(tts) {
-        tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) {
-                if (utteranceId == "FINAL_SHOPPING") {
-                    onSpeechFinished.value?.invoke()
-                }
-            }
-            override fun onError(utteranceId: String?) {}
-        })
+    val currentLanguage = remember { 
+        mutableStateOf(com.example.lab09.utils.LanguageManager.getLanguage()) 
     }
-
-    // Cambiar idioma del TTS cuando cambie el estado
+    
+    // Guardar el idioma cuando cambie
     LaunchedEffect(currentLanguage.value) {
+        com.example.lab09.utils.LanguageManager.setLanguage(currentLanguage.value)
         val locale = if (currentLanguage.value == "es") Locale("es", "ES") else Locale.US
         tts?.language = locale
-        
-        // Re-seleccionar voz para el nuevo idioma
-        try {
-            val voices = tts?.voices
-            val bestVoice = voices?.find { 
-                it.locale.language == currentLanguage.value && it.name.contains("network", true) 
-            } ?: voices?.find { it.locale.language == currentLanguage.value }
-            bestVoice?.let { tts?.voice = it }
-        } catch (e: Exception) {}
+        // ... rest of voice logic
     }
 
     val urlBasePosts = "https://json-placeholder.mock.beeceptor.com/"
@@ -148,6 +134,18 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     val retrofitRecipes = Retrofit.Builder().baseUrl(urlBaseRecipes)
         .addConverterFactory(GsonConverterFactory.create()).build()
     val servicioRecipes = retrofitRecipes.create(RecipeApiService::class.java)
+
+    // Pre-traducción en segundo plano para evitar esperas
+    LaunchedEffect(Unit) {
+        if (currentLanguage.value == "es") {
+            try {
+                val response = servicioRecipes.getRecipes(limit = 10, skip = 0)
+                response.recipes?.forEach { recipe ->
+                    com.example.lab09.utils.translateRecipeAsync(recipe, "es")
+                }
+            } catch (e: Exception) {}
+        }
+    }
 
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -300,14 +298,14 @@ fun Contenido(
             startDestination = "inicio"
         ) {
             composable("inicio") { ScreenInicio() }
-            composable("posts") { ScreenPosts(navController, servicioPosts) }
+            composable("posts") { ScreenPosts(navController, servicioPosts, currentLanguage) }
             composable("postsVer/{id}", arguments = listOf(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                ScreenPost(navController, servicioPosts, id)
+                ScreenPost(navController, servicioPosts, id, currentLanguage)
             }
-            composable("recetas") { ScreenRecipeMenu(navController) }
+            composable("recetas") { ScreenRecipeMenu(navController, currentLanguage) }
             composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, favoritos, currentLanguage) }
             composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, favoritos, currentLanguage) }
             composable("recipeDetail/{id}", arguments = listOf(

@@ -1,5 +1,7 @@
 package com.example.lab09.utils
 
+import com.example.lab09.ejercicio1.models.RecipeModel
+
 fun translateText(text: String?, targetLanguage: String): String {
     if (text == null) return ""
     if (targetLanguage == "en") return text
@@ -139,4 +141,35 @@ fun translateText(text: String?, targetLanguage: String): String {
         .replace("Chicken Alfredo Pasta", "Pasta Alfredo con Pollo")
         .replace("Japanese Ramen Soup", "Ramen Japonés")
         .replace("Beef and Broccoli", "Carne con Brócoli")
+}
+
+// NUEVAS FUNCIONES PARA TRADUCCIÓN AUTOMÁTICA
+suspend fun translateRecipeAsync(recipe: RecipeModel, targetLanguage: String): RecipeModel {
+    if (targetLanguage != "es") return recipe
+    
+    return recipe.copy(
+        name = OnDeviceTranslator.translate(recipe.name),
+        cuisine = OnDeviceTranslator.translate(recipe.cuisine),
+        difficulty = OnDeviceTranslator.translate(recipe.difficulty),
+        ingredients = recipe.ingredients?.map { OnDeviceTranslator.translate(it) },
+        instructions = recipe.instructions?.map { OnDeviceTranslator.translate(it) }
+    )
+}
+
+suspend fun translateRecipesListAsync(recipes: List<RecipeModel>, targetLanguage: String): List<RecipeModel> {
+    if (targetLanguage != "es") return recipes
+    return recipes.map { translateRecipeAsync(it, targetLanguage) }
+}
+
+suspend fun translatePostAsync(post: com.example.lab09.models.PostModel, targetLanguage: String): com.example.lab09.models.PostModel {
+    if (targetLanguage != "es") return post
+    return post.copy(
+        title = OnDeviceTranslator.translate(post.title),
+        body = OnDeviceTranslator.translate(post.body)
+    )
+}
+
+suspend fun translatePostsListAsync(posts: List<com.example.lab09.models.PostModel>, targetLanguage: String): List<com.example.lab09.models.PostModel> {
+    if (targetLanguage != "es") return posts
+    return posts.map { translatePostAsync(it, targetLanguage) }
 }

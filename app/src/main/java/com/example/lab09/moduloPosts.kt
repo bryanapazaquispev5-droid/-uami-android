@@ -30,31 +30,39 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.lab09.models.PostModel
+import com.example.lab09.utils.OnDeviceTranslator
+import com.example.lab09.utils.translatePostsListAsync
+import com.example.lab09.utils.translatePostAsync
 import com.example.lab09.remote.PostApiService
 import com.example.lab09.ui.theme.*
 
 @Composable
-fun ScreenPosts(navController: NavHostController, servicio: PostApiService) {
+fun ScreenPosts(navController: NavHostController, servicio: PostApiService, currentLanguage: MutableState<String>) {
     val listaPosts = remember { mutableStateListOf<PostModel>() }
     val nombresUsuarios = remember { mutableStateMapOf<Int, String>() }
+    val isEs = currentLanguage.value == "es"
     
-    LaunchedEffect(Unit) {
-        if (listaPosts.isEmpty()) { 
-            try {
-                val usuarios = servicio.getUsers()
-                usuarios.forEach { nombresUsuarios[it.id] = it.name }
-                
-                val listado = servicio.getUserPosts()
-                listaPosts.addAll(listado)
-            } catch (e: Exception) {
-                Log.e("POSTS", "Error: ${e.message}")
+    LaunchedEffect(currentLanguage.value) {
+        try {
+            val usuarios = servicio.getUsers()
+            usuarios.forEach { nombresUsuarios[it.id] = it.name }
+            
+            val listadoRaw = servicio.getUserPosts()
+            val listadoFinal = if (isEs) {
+                translatePostsListAsync(listadoRaw, "es")
+            } else {
+                listadoRaw
             }
+            listaPosts.clear()
+            listaPosts.addAll(listadoFinal)
+        } catch (e: Exception) {
+            Log.e("POSTS", "Error: ${e.message}")
         }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Background).statusBarsPadding()) {
         Text(
-            "Comunidad",
+            if (isEs) "Comunidad" else "Community",
             modifier = Modifier.padding(24.dp),
             style = MaterialTheme.typography.headlineMedium,
             color = OnBackground
@@ -65,8 +73,8 @@ fun ScreenPosts(navController: NavHostController, servicio: PostApiService) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(listaPosts) { item ->
-                val nombreAutor = nombresUsuarios[item.userId] ?: "Cargando..."
-                PostCard(item, nombreAutor) {
+                val nombreAutor = nombresUsuarios[item.userId] ?: (if (isEs) "Cargando..." else "Loading...")
+                PostCard(item, nombreAutor, currentLanguage) {
                     navController.navigate("postsVer/${item.id}")
                 }
             }
@@ -75,7 +83,8 @@ fun ScreenPosts(navController: NavHostController, servicio: PostApiService) {
 }
 
 @Composable
-fun PostCard(post: PostModel, nombreAutor: String, onClick: () -> Unit) {
+fun PostCard(post: PostModel, nombreAutor: String, currentLanguage: MutableState<String>, onClick: () -> Unit) {
+    val isEs = currentLanguage.value == "es"
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -109,7 +118,7 @@ fun PostCard(post: PostModel, nombreAutor: String, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Ver detalles", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                    Text(if (isEs) "Ver detalles" else "View details", style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
             }
         }
@@ -117,21 +126,25 @@ fun PostCard(post: PostModel, nombreAutor: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: Int) {
+fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: Int, currentLanguage: MutableState<String>) {
     var post by remember { mutableStateOf<PostModel?>(null) }
-    var nombreAutor by remember { mutableStateOf("Cargando...") }
+    var nombreAutor by remember { mutableStateOf("") }
+    val isEs = currentLanguage.value == "es"
     val scrollState = rememberScrollState()
     
-    LaunchedEffect(id) {
+    LaunchedEffect(id, currentLanguage.value) {
         post = null 
-        nombreAutor = "Cargando..."
+        nombreAutor = if (isEs) "Cargando..." else "Loading..."
         try { 
             val listaCompleta = servicio.getUserPosts()
             val p = listaCompleta.find { it.id == id }
-            post = p
+            
+            if (p != null) {
+                post = if (isEs) translatePostAsync(p, "es") else p
+            }
             
             val usuarios = servicio.getUsers()
-            nombreAutor = usuarios.find { it.id == p?.userId }?.name ?: "Usuario Desconocido"
+            nombreAutor = usuarios.find { it.id == p?.userId }?.name ?: (if (isEs) "Usuario Desconocido" else "Unknown User")
         } catch (e: Exception) { 
             Log.e("POST_DETAIL", "Error: ${e.message}")
         }
@@ -169,7 +182,7 @@ fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: I
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Rounded.ArrowBack, 
-                                contentDescription = "Volver",
+                                contentDescription = if (isEs) "Volver" else "Back",
                                 modifier = Modifier.padding(8.dp),
                                 tint = Color.White
                             )
@@ -182,7 +195,7 @@ fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: I
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
-                                    "ARTÍCULO DE COMUNIDAD",
+                                    if (isEs) "ARTÍCULO DE COMUNIDAD" else "COMMUNITY ARTICLE",
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Black,
@@ -236,7 +249,7 @@ fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: I
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Rounded.Verified, null, tint = Primary, modifier = Modifier.size(14.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Autor Gourmet", style = MaterialTheme.typography.bodySmall, color = Primary)
+                                    Text(if (isEs) "Autor Gourmet" else "Gourmet Author", style = MaterialTheme.typography.bodySmall, color = Primary)
                                 }
                             }
                         }
@@ -268,7 +281,7 @@ fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: I
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         DetailChip(Icons.Rounded.Numbers, "Post #${post!!.id}")
-                        DetailChip(Icons.Rounded.Tag, "Comunidad")
+                        DetailChip(Icons.Rounded.Tag, if (isEs) "Comunidad" else "Community")
                     }
 
                     Spacer(Modifier.height(32.dp))
@@ -278,32 +291,54 @@ fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: I
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
                         InteractionItem(Icons.Rounded.FavoriteBorder, "${150 + post!!.id * 7}")
                         InteractionItem(Icons.Rounded.ChatBubbleOutline, "${post!!.commentCount ?: 0}")
-                        InteractionItem(Icons.Rounded.Share, "Compartir")
+                        InteractionItem(Icons.Rounded.Share, if (isEs) "Compartir" else "Share")
                     }
                     
                     Spacer(Modifier.height(40.dp))
                     
-                    Text("Comentarios (${post!!.commentCount ?: 0})", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = OnBackground)
+                    Text(
+                        if (isEs) "Comentarios (${post!!.commentCount ?: 0})" else "Comments (${post!!.commentCount ?: 0})", 
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), 
+                        color = OnBackground
+                    )
                     Spacer(Modifier.height(16.dp))
                     
                     val numComentarios = post!!.commentCount ?: 0
                     if (numComentarios > 0) {
-                        val listaSimulada = listOf(
-                            "¡Excelente publicación! Me ha servido mucho.",
-                            "Muy bien explicado el tema, gracias.",
-                            "Interesante punto de vista sobre esto.",
-                            "Me gustaría saber más al respecto.",
-                            "Gran aporte para la comunidad Gourmet."
-                        )
+                        val listaSimulada = if (isEs) {
+                            listOf(
+                                "¡Excelente publicación! Me ha servido mucho.",
+                                "Muy bien explicado el tema, gracias.",
+                                "Interesante punto de vista sobre esto.",
+                                "Me gustaría saber más al respecto.",
+                                "Gran aporte para la comunidad Gourmet."
+                            )
+                        } else {
+                            listOf(
+                                "Excellent post! It has helped me a lot.",
+                                "Very well explained topic, thanks.",
+                                "Interesting point of view on this.",
+                                "I would like to know more about it.",
+                                "Great contribution to the Gourmet community."
+                            )
+                        }
                         repeat(minOf(numComentarios, 5)) { index ->
-                            CommentItem(user = "Usuario Gourmet ${index + 1}", text = listaSimulada[index % listaSimulada.size])
+                            CommentItem(
+                                user = if (isEs) "Usuario Gourmet ${index + 1}" else "Gourmet User ${index + 1}", 
+                                text = listaSimulada[index % listaSimulada.size]
+                            )
                             Spacer(Modifier.height(12.dp))
                         }
                         if (numComentarios > 5) {
-                            Text("Ver los ${numComentarios - 5} comentarios restantes...", style = MaterialTheme.typography.labelMedium, color = Primary, modifier = Modifier.padding(vertical = 8.dp))
+                            Text(
+                                if (isEs) "Ver los ${numComentarios - 5} comentarios restantes..." else "See the ${numComentarios - 5} remaining comments...", 
+                                style = MaterialTheme.typography.labelMedium, 
+                                color = Primary, 
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
                         }
                     } else {
-                        Text("No hay comentarios aún.", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (isEs) "No hay comentarios aún." else "No comments yet.", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
                     }
                     
                     Spacer(Modifier.height(100.dp))
