@@ -1,5 +1,7 @@
 package com.example.lab09.ejercicio1.ui
 
+import android.os.Bundle
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
@@ -12,6 +14,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -19,7 +22,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.rounded.*
@@ -31,9 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +54,8 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.lab09.ejercicio1.models.RecipeModel
 import com.example.lab09.ejercicio1.remote.RecipeApiService
 import com.example.lab09.ui.theme.*
+import java.util.Locale
+import android.speech.tts.TextToSpeech
 
 @Composable
 fun ScreenRecipeMenu(navController: NavHostController, currentLanguage: MutableState<String>) {
@@ -87,7 +98,7 @@ fun ScreenRecipeMenu(navController: NavHostController, currentLanguage: MutableS
             shape = RoundedCornerShape(20.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.MenuBook, contentDescription = null, tint = OnPrimary)
+                Icon(Icons.AutoMirrored.Rounded.MenuBook, contentDescription = null, tint = OnPrimary)
                 Spacer(Modifier.width(12.dp))
                 Text(
                     if (isEs) "VER TODAS LAS RECETAS" else "VIEW ALL RECIPES", 
@@ -105,7 +116,7 @@ fun ScreenRecipeMenu(navController: NavHostController, currentLanguage: MutableS
                 .fillMaxWidth()
                 .height(64.dp),
             shape = RoundedCornerShape(20.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
+            border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Favorite, contentDescription = null, tint = Primary)
@@ -139,10 +150,10 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
             val response = servicio.getRecipes(limit = 0, skip = 0)
             val rawRecipes = response.recipes ?: emptyList()
             
-            if (currentLanguage.value == "es") {
-                allRecipes = translateRecipesListAsync(rawRecipes, "es")
+            allRecipes = if (currentLanguage.value == "es") {
+                translateRecipesListAsync(rawRecipes, "es")
             } else {
-                allRecipes = rawRecipes
+                rawRecipes
             }
         } catch (e: Exception) {
             Log.e("RECIPES_UI", "Error: ${e.message}")
@@ -212,7 +223,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.Rounded.ArrowBack, null, tint = OnBackground)
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = OnBackground)
                         }
                         Text(if (isEs) "Recetas" else "Recipes", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
                     }
@@ -235,7 +246,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                             DropdownMenuItem(
                                 text = { Text(if (isEs) "Por defecto" else "Default", color = OnSurface) },
                                 onClick = { sortOrder = "Default"; showSortMenu = false },
-                                leadingIcon = { Icon(Icons.Rounded.Sort, null, tint = Primary) }
+                                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Sort, null, tint = Primary) }
                             )
                             DropdownMenuItem(
                                 text = { Text(if (isEs) "Nombre A-Z" else "Name A-Z", color = OnSurface) },
@@ -400,7 +411,7 @@ fun ScreenRecipes(navController: NavHostController, servicio: RecipeApiService, 
                             onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
                         )
                     }
-                    item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                    item(span = { GridItemSpan(2) }) {
                         Spacer(Modifier.height(80.dp))
                     }
                 }
@@ -438,7 +449,7 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
             Column(modifier = Modifier.background(Background).padding(top = 24.dp, start = 8.dp, end = 24.dp, bottom = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Rounded.ArrowBack, null, tint = OnBackground)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = OnBackground)
                     }
                     Text(if (isEs) "Mis Favoritos" else "My Favorites", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
                 }
@@ -468,7 +479,7 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
                         isFav = true,
                         onFavToggle = {
                             if (favoritos is MutableList) {
-                                recipe.id?.let { (favoritos as MutableList<Int>).remove(it) }
+                                recipe.id?.let { favoritos.remove(it) }
                             }
                         },
                         currentLanguage = currentLanguage,
@@ -601,10 +612,10 @@ fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiServ
         isLoading = true
         try { 
             val rawRecipe = servicio.getRecipeById(id)
-            if (currentLanguage.value == "es") {
-                recipe = translateRecipeAsync(rawRecipe, "es")
+            recipe = if (currentLanguage.value == "es") {
+                translateRecipeAsync(rawRecipe, "es")
             } else {
-                recipe = rawRecipe
+                rawRecipe
             }
         } catch (e: Exception) { e.printStackTrace() }
         finally { isLoading = false }
@@ -639,7 +650,7 @@ fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiServ
                         shape = CircleShape
                     ) {
                         Icon(
-                            Icons.Rounded.ArrowBack, 
+                            Icons.AutoMirrored.Rounded.ArrowBack, 
                             null, 
                             tint = Color.White, 
                             modifier = Modifier.padding(8.dp)
@@ -721,13 +732,13 @@ fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiServ
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ScreenCookingMode(
     navController: NavHostController, 
     servicio: RecipeApiService, 
     id: Int,
-    tts: android.speech.tts.TextToSpeech?,
+    tts: TextToSpeech?,
     onSpeechFinished: MutableState<(() -> Unit)?>,
     currentLanguage: MutableState<String>
 ) {
@@ -738,10 +749,10 @@ fun ScreenCookingMode(
         isLoading = true
         try { 
             val rawRecipe = servicio.getRecipeById(id)
-            if (currentLanguage.value == "es") {
-                recipe = translateRecipeAsync(rawRecipe, "es")
+            recipe = if (currentLanguage.value == "es") {
+                translateRecipeAsync(rawRecipe, "es")
             } else {
-                recipe = rawRecipe
+                rawRecipe
             }
         } catch (e: Exception) { e.printStackTrace() }
         finally { isLoading = false }
@@ -787,27 +798,26 @@ fun ScreenCookingMode(
                 } else {
                     "$fraseBienvenida. Let's start by reviewing the ingredients."
                 }
-                tts?.speak(intro, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                tts?.speak(intro, TextToSpeech.QUEUE_FLUSH, null, null)
             } else {
-                val paso = index
                 val total = instructions.size
                 val textoInstruccion = instructions[index - 1]
                 
                 val transicion = if (isEs) {
-                    when(paso) {
+                    when(index) {
                         1 -> "¡Muy bien! Empecemos con el primer paso. "
                         total -> "¡Ya casi terminamos! El último paso es: "
-                        else -> "Siguiente paso, número $paso. "
+                        else -> "Siguiente paso, número $index. "
                     }
                 } else {
-                    when(paso) {
+                    when(index) {
                         1 -> "Alright! Let's start with the first step. "
                         total -> "Almost done! The final step is: "
-                        else -> "Next step, number $paso. "
+                        else -> "Next step, number $index. "
                     }
                 }
                 
-                tts?.speak("$transicion $textoInstruccion", android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                tts?.speak("$transicion $textoInstruccion", TextToSpeech.QUEUE_FLUSH, null, null)
             }
         }
 
@@ -853,7 +863,6 @@ fun ScreenCookingMode(
                         stepNumber = pageIndex,
                         instruction = instructions[pageIndex - 1],
                         totalSteps = instructions.size,
-                        tts = tts,
                         currentLanguage = currentLanguage
                     )
                 }
@@ -880,12 +889,12 @@ fun ScreenCookingMode(
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ShoppingListCard(
     ingredients: List<String>, 
-    tts: android.speech.tts.TextToSpeech? = null,
-    pagerState: androidx.compose.foundation.pager.PagerState? = null,
+    tts: TextToSpeech? = null,
+    pagerState: PagerState? = null,
     onSpeechFinished: MutableState<(() -> Unit)?>? = null,
     currentLanguage: MutableState<String>
 ) {
@@ -938,7 +947,7 @@ fun ShoppingListCard(
                             checkedState[index] = nuevoEstado
                             if (nuevoEstado) {
                                 val frase = frasesCompletado.random()
-                                tts?.speak(frase, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                                tts?.speak(frase, TextToSpeech.QUEUE_FLUSH, null, null)
                             }
                         }
                     )
@@ -970,9 +979,9 @@ fun ShoppingListCard(
 
                     tts?.speak(
                         congrats,
-                        android.speech.tts.TextToSpeech.QUEUE_FLUSH,
-                        android.os.Bundle().apply { 
-                            putString(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "FINAL_SHOPPING") 
+                        TextToSpeech.QUEUE_FLUSH,
+                        Bundle().apply { 
+                            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "FINAL_SHOPPING") 
                         },
                         "FINAL_SHOPPING"
                     )
@@ -1023,7 +1032,7 @@ fun IngredientCheckItem(text: String, isChecked: Boolean, onCheckedChange: (Bool
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    textDecoration = if (isChecked) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                    textDecoration = if (isChecked) TextDecoration.LineThrough else null
                 ),
                 color = if (isChecked) TextMuted else OnSurface
             )
@@ -1036,7 +1045,6 @@ fun CookingStepCard(
     stepNumber: Int, 
     instruction: String, 
     totalSteps: Int,
-    tts: android.speech.tts.TextToSpeech? = null,
     currentLanguage: MutableState<String>
 ) {
     val isEs = currentLanguage.value == "es"
@@ -1059,7 +1067,7 @@ fun CookingStepCard(
                 Surface(
                     color = Primary.copy(alpha = 0.1f),
                     shape = CircleShape,
-                    border = androidx.compose.foundation.BorderStroke(2.dp, Primary)
+                    border = BorderStroke(2.dp, Primary)
                 ) {
                     Text(
                         if (isEs) "PASO $stepNumber / $totalSteps" else "STEP $stepNumber / $totalSteps",
@@ -1114,7 +1122,7 @@ fun CookingTimer(initialMinutes: Int, currentLanguage: MutableState<String>) {
 
     LaunchedEffect(isRunning, timeLeft) {
         if (isRunning && timeLeft > 0) {
-            kotlinx.coroutines.delay(1000L)
+            delay(1000L)
             timeLeft -= 1
         } else if (timeLeft == 0) {
             isRunning = false
@@ -1131,7 +1139,7 @@ fun CookingTimer(initialMinutes: Int, currentLanguage: MutableState<String>) {
         val minutes = timeLeft / 60
         val seconds = timeLeft % 60
         Text(
-            text = String.format("%02d:%02d", minutes, seconds),
+            text = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds),
             style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
             color = if (timeLeft == 0) Secondary else Primary
         )
@@ -1168,7 +1176,7 @@ fun CookingTimer(initialMinutes: Int, currentLanguage: MutableState<String>) {
 }
 
 @Composable
-fun DetailBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+fun DetailBadge(icon: ImageVector, label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, tint = Primary, modifier = Modifier.size(24.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextMuted)
@@ -1205,7 +1213,7 @@ fun StepRow(index: Int, text: String) {
             modifier = Modifier.size(32.dp),
             shape = CircleShape,
             color = Surface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
+            border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text("$index", style = MaterialTheme.typography.labelMedium, color = Primary)

@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -19,14 +20,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -35,13 +34,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.lab09.ejercicio1.remote.RecipeApiService
-import com.example.lab09.ejercicio1.ui.ScreenRecipeDetail
-import com.example.lab09.ejercicio1.ui.ScreenRecipes
-import com.example.lab09.ejercicio1.ui.ScreenRecipeMenu
-import com.example.lab09.ejercicio1.ui.ScreenFavorites
 import com.example.lab09.remote.PostApiService
 import com.example.lab09.ui.theme.*
-import com.example.lab09.utils.FavoriteManager
+import com.example.lab09.utils.*
+import com.example.lab09.ejercicio1.ui.*
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -56,8 +52,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         enableEdgeToEdge()
         
         // Inicializar Utilidades
-        com.example.lab09.utils.LanguageManager.init(this)
-        com.example.lab09.utils.OnDeviceTranslator.init(this)
+        LanguageManager.init(this)
+        OnDeviceTranslator.init(this)
         
         // Inicializar TTS
         tts = TextToSpeech(this, this)
@@ -82,7 +78,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val localeES = Locale("es", "ES")
+            val localeES = Locale.forLanguageTag("es-ES")
             tts?.language = localeES
             
             // Intentar buscar una voz de alta calidad (network voice)
@@ -93,7 +89,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 } ?: voices?.find { it.locale.language == "es" }
                 
                 bestVoice?.let { tts?.voice = it }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Si falla la selección de voz avanzada, se queda con la por defecto
             }
 
@@ -114,13 +110,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 fun ProgPrincipal9(tts: TextToSpeech?) {
     val onSpeechFinished = remember { mutableStateOf<(() -> Unit)?>(null) }
     val currentLanguage = remember { 
-        mutableStateOf(com.example.lab09.utils.LanguageManager.getLanguage()) 
+        mutableStateOf(LanguageManager.getLanguage()) 
     }
     
     // Guardar el idioma cuando cambie
     LaunchedEffect(currentLanguage.value) {
-        com.example.lab09.utils.LanguageManager.setLanguage(currentLanguage.value)
-        val locale = if (currentLanguage.value == "es") Locale("es", "ES") else Locale.US
+        LanguageManager.setLanguage(currentLanguage.value)
+        val locale = if (currentLanguage.value == "es") Locale.forLanguageTag("es-ES") else Locale.US
         tts?.language = locale
         // ... rest of voice logic
     }
@@ -141,9 +137,9 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
             try {
                 val response = servicioRecipes.getRecipes(limit = 10, skip = 0)
                 response.recipes?.forEach { recipe ->
-                    com.example.lab09.utils.translateRecipeAsync(recipe, "es")
+                    translateRecipeAsync(recipe, "es")
                 }
-            } catch (e: Exception) {}
+            } catch (_: Exception) {}
         }
     }
 
@@ -284,7 +280,7 @@ fun Contenido(
     servicioPosts: PostApiService,
     servicioRecipes: RecipeApiService,
     favoritos: MutableList<Int>,
-    tts: android.speech.tts.TextToSpeech?,
+    tts: TextToSpeech?,
     onSpeechFinished: MutableState<(() -> Unit)?>,
     currentLanguage: MutableState<String>
 ) {
@@ -318,7 +314,7 @@ fun Contenido(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                com.example.lab09.ejercicio1.ui.ScreenCookingMode(navController, servicioRecipes, id, tts, onSpeechFinished, currentLanguage)
+                ScreenCookingMode(navController, servicioRecipes, id, tts, onSpeechFinished, currentLanguage)
             }
         }
     }
@@ -341,7 +337,7 @@ fun ScreenInicio() {
             modifier = Modifier.fillMaxWidth(),
             color = Primary.copy(alpha = 0.1f),
             shape = RoundedCornerShape(32.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Primary.copy(alpha = 0.2f))
+            border = BorderStroke(1.dp, Primary.copy(alpha = 0.2f))
         ) {
             Column(
                 modifier = Modifier.padding(32.dp),

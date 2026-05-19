@@ -1,6 +1,7 @@
 package com.example.lab09.utils
 
 import com.example.lab09.ejercicio1.models.RecipeModel
+import com.example.lab09.models.PostModel
 
 fun translateText(text: String?, targetLanguage: String): String {
     if (text == null) return ""
@@ -126,7 +127,7 @@ fun translateText(text: String?, targetLanguage: String): String {
         "ml" to "ml"
     )
 
-    var translated = text ?: ""
+    var translated = text!!
     dictionary.forEach { (en, es) ->
         // Reemplazo inteligente: busca la palabra completa e ignora mayúsculas
         val regex = "\\b$en\\b".toRegex(RegexOption.IGNORE_CASE)
@@ -161,7 +162,7 @@ suspend fun translateRecipesListAsync(recipes: List<RecipeModel>, targetLanguage
     return recipes.map { translateRecipeAsync(it, targetLanguage) }
 }
 
-suspend fun translatePostAsync(post: com.example.lab09.models.PostModel, targetLanguage: String): com.example.lab09.models.PostModel {
+suspend fun translatePostAsync(post: PostModel, targetLanguage: String): PostModel {
     if (targetLanguage != "es") return post
     return post.copy(
         title = OnDeviceTranslator.translate(post.title),
@@ -169,7 +170,7 @@ suspend fun translatePostAsync(post: com.example.lab09.models.PostModel, targetL
     )
 }
 
-suspend fun translatePostsListAsync(posts: List<com.example.lab09.models.PostModel>, targetLanguage: String): List<com.example.lab09.models.PostModel> {
+suspend fun translatePostsListAsync(posts: List<PostModel>, targetLanguage: String): List<PostModel> {
     if (targetLanguage != "es") return posts
     return posts.map { translatePostAsync(it, targetLanguage) }
 }

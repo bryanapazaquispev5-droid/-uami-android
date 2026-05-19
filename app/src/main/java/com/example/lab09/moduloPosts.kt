@@ -15,13 +15,13 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,11 +30,10 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.lab09.models.PostModel
-import com.example.lab09.utils.OnDeviceTranslator
-import com.example.lab09.utils.translatePostsListAsync
-import com.example.lab09.utils.translatePostAsync
+import com.example.lab09.utils.*
 import com.example.lab09.remote.PostApiService
 import com.example.lab09.ui.theme.*
+import androidx.compose.foundation.BorderStroke
 
 @Composable
 fun ScreenPosts(navController: NavHostController, servicio: PostApiService, currentLanguage: MutableState<String>) {
@@ -261,7 +260,7 @@ fun ScreenPost(navController: NavHostController, servicio: PostApiService, id: I
                     Surface(
                         color = Surface.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(32.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Surface.copy(alpha = 0.8f))
+                        border = BorderStroke(1.dp, Surface.copy(alpha = 0.8f))
                     ) {
                         Column(modifier = Modifier.padding(28.dp)) {
                             Icon(Icons.Rounded.FormatQuote, null, tint = Primary.copy(alpha = 0.3f), modifier = Modifier.size(40.dp).offset(x = (-10).dp))
@@ -362,8 +361,8 @@ fun CommentItem(user: String, text: String) {
 }
 
 @Composable
-fun DetailChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
-    Surface(color = Surface, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Primary.copy(alpha = 0.2f))) {
+fun DetailChip(icon: ImageVector, label: String) {
+    Surface(color = Surface, shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Primary.copy(alpha = 0.2f))) {
         Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = Primary, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
@@ -373,7 +372,7 @@ fun DetailChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: Str
 }
 
 @Composable
-fun InteractionItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
+fun InteractionItem(icon: ImageVector, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, tint = TextMuted, modifier = Modifier.size(24.dp))
         Spacer(Modifier.height(4.dp))
