@@ -34,6 +34,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.lab09.ejercicio1.remote.RecipeApiService
+import com.example.lab09.ejercicio1.remote.MealDbApiService
+import com.example.lab09.ejercicio1.models.RecipeModel
 import com.example.lab09.remote.PostApiService
 import com.example.lab09.ui.theme.*
 import com.example.lab09.utils.*
@@ -113,12 +115,15 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
         mutableStateOf(LanguageManager.getLanguage()) 
     }
     
+    // Estado global para las recetas pre-cargadas
+    var globalRecipes by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
+    var isPreparingData by remember { mutableStateOf(false) }
+    
     // Guardar el idioma cuando cambie
     LaunchedEffect(currentLanguage.value) {
         LanguageManager.setLanguage(currentLanguage.value)
         val locale = if (currentLanguage.value == "es") Locale.forLanguageTag("es-ES") else Locale.US
         tts?.language = locale
-        // ... rest of voice logic
     }
 
     val urlBasePosts = "https://json-placeholder.mock.beeceptor.com/"
@@ -131,15 +136,34 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
         .addConverterFactory(GsonConverterFactory.create()).build()
     val servicioRecipes = retrofitRecipes.create(RecipeApiService::class.java)
 
-    // Pre-traducción en segundo plano para evitar esperas
-    LaunchedEffect(Unit) {
-        if (currentLanguage.value == "es") {
+    val urlBaseMealDB = "https://www.themealdb.com/api/json/v1/1/"
+    val retrofitMealDB = Retrofit.Builder().baseUrl(urlBaseMealDB)
+        .addConverterFactory(GsonConverterFactory.create()).build()
+    val servicioMealDB = retrofitMealDB.create(com.example.lab09.ejercicio1.remote.MealDbApiService::class.java)
+
+    // Lógica de Pre-carga y Traducción (Optimizado)
+    LaunchedEffect(currentLanguage.value) {
+        if (currentLanguage.value.isNotEmpty()) {
             try {
-                val response = servicioRecipes.getRecipes(limit = 10, skip = 0)
-                response.recipes?.forEach { recipe ->
-                    translateRecipeAsync(recipe, "es")
+                // 1. Carga inicial de datos
+                val response1 = servicioRecipes.getRecipes(limit = 50, skip = 0)
+                val recipes1 = response1.recipes ?: emptyList()
+                val response2 = servicioMealDB.getRecipes(limit = 50, skip = 0)
+                val recipes2 = response2.recipes ?: emptyList()
+                val rawRecipes = recipes1 + recipes2
+
+                // 2. Traducción IA (con el sistema de caché interno)
+                globalRecipes = if (currentLanguage.value == "es") {
+                    translateRecipesListAsync(rawRecipes, "es")
+                } else {
+                    rawRecipes
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                // Finalizar pantalla de carga si estaba activa
+                isPreparingData = false
+            }
         }
     }
 
@@ -158,46 +182,159 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     }
 
     Scaffold(
-        bottomBar = { CustomBottomBar(navController) },
-        topBar = { LanguageToggle(currentLanguage) },
+        bottomBar = { 
+            // Ocultar barra de navegación si no se ha elegido idioma o si se está cargando
+            if (currentLanguage.value.isNotEmpty() && !isPreparingData) {
+                CustomBottomBar(navController) 
+            }
+        },
         containerColor = Background
     ) { paddingValues ->
-        Contenido(paddingValues, navController, servicioPosts, servicioRecipes, favoritos, tts, onSpeechFinished, currentLanguage)
+        when {
+            currentLanguage.value.isEmpty() -> {
+                LanguageSelectionScreen(currentLanguage) {
+                    isPreparingData = true
+                }
+            }
+            isPreparingData -> {
+                PreparingDataScreen(currentLanguage.value)
+            }
+            else -> {
+                Contenido(paddingValues, navController, servicioPosts, servicioRecipes, servicioMealDB, favoritos, tts, onSpeechFinished, currentLanguage, globalRecipes)
+            }
+        }
     }
 }
 
 @Composable
-fun LanguageToggle(currentLanguage: MutableState<String>) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically
+fun PreparingDataScreen(lang: String) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Background),
+        contentAlignment = Alignment.Center
     ) {
-        Surface(
-            color = Surface,
-            shape = RoundedCornerShape(12.dp),
-            onClick = { 
-                currentLanguage.value = if (currentLanguage.value == "es") "en" else "es" 
-            }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = Primary, strokeWidth = 4.dp)
+            Spacer(Modifier.height(24.dp))
+            Text(
+                if(lang == "es") "Preparando tu experiencia..." else "Preparing your experience...",
+                style = MaterialTheme.typography.headlineSmall,
+                color = OnBackground
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if(lang == "es") "Traduciendo recetas con IA de Google" else "Translating recipes with Google IA",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted
+            )
+        }
+    }
+}
+
+@Composable
+fun LanguageSelectionScreen(currentLanguage: MutableState<String>, onContinue: () -> Unit) {
+    var selectedTemp by remember { mutableStateOf("") }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Background)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Icon(
+                Icons.Rounded.Language,
+                contentDescription = null,
+                modifier = Modifier.size(80.dp),
+                tint = Primary
+            )
+            Spacer(Modifier.height(24.dp))
+            Text(
+                "Welcome / Bienvenido",
+                style = MaterialTheme.typography.headlineMedium,
+                color = OnBackground,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Choose your language / Elige tu idioma",
+                style = MaterialTheme.typography.bodyLarge,
+                color = TextMuted
+            )
+            Spacer(Modifier.height(48.dp))
+            
+            // Opción Inglés
+            Surface(
+                onClick = { selectedTemp = "en" },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = if (selectedTemp == "en") Primary.copy(alpha = 0.1f) else Surface,
+                border = if (selectedTemp == "en") BorderStroke(2.dp, Primary) else null
             ) {
-                Icon(
-                    Icons.Rounded.Language, 
-                    null, 
-                    tint = Primary, 
-                    modifier = Modifier.size(16.dp)
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = (selectedTemp == "en"),
+                        onClick = { selectedTemp = "en" },
+                        colors = RadioButtonDefaults.colors(selectedColor = Primary)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("English", color = OnBackground, fontWeight = FontWeight.Bold)
+                }
+            }
+            
+            Spacer(Modifier.height(16.dp))
+            
+            // Opción Español
+            Surface(
+                onClick = { selectedTemp = "es" },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = if (selectedTemp == "es") Primary.copy(alpha = 0.1f) else Surface,
+                border = if (selectedTemp == "es") BorderStroke(2.dp, Primary) else null
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = (selectedTemp == "es"),
+                        onClick = { selectedTemp = "es" },
+                        colors = RadioButtonDefaults.colors(selectedColor = Primary)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Español", color = OnBackground, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(Modifier.height(48.dp))
+
+            // Botón de confirmación (solo habilitado si hay algo seleccionado)
+            Button(
+                onClick = { 
+                    if (selectedTemp.isNotEmpty()) {
+                        currentLanguage.value = selectedTemp
+                        LanguageManager.setFirstRunCompleted()
+                        onContinue()
+                    }
+                },
+                enabled = selectedTemp.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Primary,
+                    disabledContainerColor = Surface
                 )
-                Spacer(Modifier.width(8.dp))
+            ) {
                 Text(
-                    text = if (currentLanguage.value == "es") "ESPAÑOL" else "ENGLISH",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = OnSurface
+                    if (selectedTemp == "es") "CONTINUAR" else "CONTINUE", 
+                    color = if (selectedTemp.isNotEmpty()) OnPrimary else TextMuted,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -279,10 +416,12 @@ fun Contenido(
     navController: NavHostController,
     servicioPosts: PostApiService,
     servicioRecipes: RecipeApiService,
+    servicioMealDB: MealDbApiService,
     favoritos: MutableList<Int>,
     tts: TextToSpeech?,
     onSpeechFinished: MutableState<(() -> Unit)?>,
-    currentLanguage: MutableState<String>
+    currentLanguage: MutableState<String>,
+    preloadedRecipes: List<RecipeModel>
 ) {
     Box(
         modifier = Modifier
@@ -302,19 +441,19 @@ fun Contenido(
                 ScreenPost(navController, servicioPosts, id, currentLanguage)
             }
             composable("recetas") { ScreenRecipeMenu(navController, currentLanguage) }
-            composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, favoritos, currentLanguage) }
-            composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, favoritos, currentLanguage) }
+            composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, servicioMealDB, favoritos, currentLanguage, preloadedRecipes) }
+            composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, servicioMealDB, favoritos, currentLanguage) }
             composable("recipeDetail/{id}", arguments = listOf(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                ScreenRecipeDetail(navController, servicioRecipes, id, favoritos, currentLanguage)
+                ScreenRecipeDetail(navController, servicioRecipes, servicioMealDB, id, favoritos, currentLanguage)
             }
             composable("cookingMode/{id}", arguments = listOf(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                ScreenCookingMode(navController, servicioRecipes, id, tts, onSpeechFinished, currentLanguage)
+                ScreenCookingMode(navController, servicioRecipes, servicioMealDB, id, tts, onSpeechFinished, currentLanguage)
             }
         }
     }

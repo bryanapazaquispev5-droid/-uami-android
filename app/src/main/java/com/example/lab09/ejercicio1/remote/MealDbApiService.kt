@@ -4,18 +4,18 @@ import com.example.lab09.ejercicio1.models.RecipeResponse
 import retrofit2.http.GET
 import retrofit2.http.Query
 
-interface RecipeApiService {
-    @GET("recipes")
+interface MealDbApiService {
+    @GET("search.php?s=")
     suspend fun getRecipes(
         @Query("limit") limit: Int,
         @Query("skip") skip: Int
     ): RecipeResponse
 
-    @GET("recipes")
+    @GET("lookup.php")
     suspend fun getRecipeById(@Query("i") id: Int): RecipeResponse
 
-    @GET("recipes/search")
+    @GET("search.php")
     suspend fun searchRecipes(
-        @Query("q") query: String
+        @Query("s") query: String
     ): RecipeResponse
 }
