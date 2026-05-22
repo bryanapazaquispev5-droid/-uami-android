@@ -45,6 +45,13 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 import android.speech.tts.TextToSpeech
 import java.util.Locale
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
@@ -208,23 +215,153 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
 
 @Composable
 fun PreparingDataScreen(lang: String) {
+    val isEs = lang == "es"
+    val infiniteTransition = rememberInfiniteTransition(label = "loading")
+    
+    // Ciclo de mensajes divertidos
+    val messages = if (isEs) listOf(
+        "Afilando los cuchillos...",
+        "Precalentando el horno...",
+        "Sazonando las recetas...",
+        "IA de Google cocinando...",
+        "Emplatando la experiencia..."
+    ) else listOf(
+        "Sharpening the knives...",
+        "Preheating the oven...",
+        "Seasoning the recipes...",
+        "Google IA is cooking...",
+        "Plating the experience..."
+    )
+    
+    var currentMessageIndex by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while(true) {
+            kotlinx.coroutines.delay(2000)
+            currentMessageIndex = (currentMessageIndex + 1) % messages.size
+        }
+    }
+
+    // Animación de escala para el chef
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
+    // Animación de flotación suave
+    val offsetY by infiniteTransition.animateFloat(
+        initialValue = -5f,
+        targetValue = 5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "offset"
+    )
+
     Box(
-        modifier = Modifier.fillMaxSize().background(Background),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Background, Surface)
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = Primary, strokeWidth = 4.dp)
-            Spacer(Modifier.height(24.dp))
-            Text(
-                if(lang == "es") "Preparando tu experiencia..." else "Preparing your experience...",
-                style = MaterialTheme.typography.headlineSmall,
-                color = OnBackground
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Contenedor del Chef con Efecto de "Vapor"
+            Box(contentAlignment = Alignment.TopCenter) {
+                // Simulación de Vapor (3 círculos animados)
+                repeat(3) { i ->
+                    val steamAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.6f,
+                        targetValue = 0f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1500, delayMillis = i * 500, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "steamAlpha$i"
+                    )
+                    val steamOffset by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = -100f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1500, delayMillis = i * 500, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "steamOffset$i"
+                    )
+                    
+                    Box(
+                        modifier = Modifier
+                            .offset(y = steamOffset.dp, x = (i * 20 - 20).dp)
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = steamAlpha))
+                    )
+                }
+
+                Image(
+                    painter = painterResource(id = R.drawable.ic_chef_loading),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(160.dp)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationY = offsetY
+                        )
+                )
+            }
+            
+            Spacer(Modifier.height(40.dp))
+            
+            // Barra de progreso más sutil
+            LinearProgressIndicator(
+                color = Primary,
+                trackColor = Surface,
+                modifier = Modifier
+                    .width(200.dp)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(10.dp))
             )
-            Spacer(Modifier.height(8.dp))
+            
+            Spacer(Modifier.height(32.dp))
+            
+            // Texto principal animado por el cambio de índice
+            androidx.compose.animation.AnimatedContent(
+                targetState = messages[currentMessageIndex],
+                transitionSpec = {
+                    (fadeIn() + slideInVertically { it }).togetherWith(fadeOut() + slideOutVertically { -it })
+                },
+                label = "message"
+            ) { text ->
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.5.sp
+                    ),
+                    color = OnBackground,
+                    textAlign = TextAlign.Center
+                )
+            }
+            
+            Spacer(Modifier.height(12.dp))
+            
             Text(
-                if(lang == "es") "Traduciendo recetas con IA de Google" else "Translating recipes with Google IA",
+                if(isEs) "Configurando tu cocina personal" else "Setting up your personal kitchen",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted
+                color = TextMuted,
+                fontWeight = FontWeight.Medium
             )
         }
     }
@@ -430,7 +567,23 @@ fun Contenido(
     ) {
         NavHost(
             navController = navController,
-            startDestination = "inicio"
+            startDestination = "inicio",
+            enterTransition = {
+                fadeIn(animationSpec = tween(500)) + 
+                scaleIn(initialScale = 0.8f, animationSpec = tween(500))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(500)) + 
+                scaleOut(targetScale = 1.1f, animationSpec = tween(500))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(500)) + 
+                scaleIn(initialScale = 1.1f, animationSpec = tween(500))
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(500)) + 
+                scaleOut(targetScale = 0.8f, animationSpec = tween(500))
+            }
         ) {
             composable("inicio") { ScreenInicio() }
             composable("posts") { ScreenPosts(navController, servicioPosts, currentLanguage) }
