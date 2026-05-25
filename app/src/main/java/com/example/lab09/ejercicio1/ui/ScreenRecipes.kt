@@ -457,8 +457,7 @@ fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService
         favoritos.forEach { id ->
             try {
                 // Intentar en ambas fuentes (DummyJSON y TheMealDB)
-                val response1 = servicio.getRecipeById(id)
-                val recipe1 = response1.recipes?.firstOrNull()
+                val recipe1 = servicio.getRecipeById(id)
                 
                 if (recipe1 != null) {
                     listadoRaw.add(recipe1)
@@ -653,8 +652,7 @@ fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiServ
         isLoading = true
         try { 
             // Intentar buscar el ID en ambas APIs
-            val response1 = servicio.getRecipeById(id)
-            val rawRecipe1 = response1.recipes?.firstOrNull()
+            val rawRecipe1 = servicio.getRecipeById(id)
             
             val finalRecipe = if (rawRecipe1 != null && rawRecipe1.name != "Receta sin nombre") {
                 rawRecipe1
@@ -811,8 +809,7 @@ fun ScreenCookingMode(
     LaunchedEffect(id, currentLanguage.value) {
         isLoading = true
         try { 
-            val response1 = servicio.getRecipeById(id)
-            val rawRecipe1 = response1.recipes?.firstOrNull()
+            val rawRecipe1 = servicio.getRecipeById(id)
             
             val finalRecipe = if (rawRecipe1 != null && rawRecipe1.name != "Receta sin nombre") {
                 rawRecipe1
