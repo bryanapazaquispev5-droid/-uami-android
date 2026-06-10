@@ -1,5 +1,6 @@
 package com.example.lab09
 
+import android.util.Log
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,8 +35,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.lab09.ejercicio1.remote.RecipeApiService
-import com.example.lab09.ejercicio1.remote.MealDbApiService
 import com.example.lab09.ejercicio1.models.RecipeModel
+import com.example.lab09.utils.RecipeCacheManager
 import com.example.lab09.ui.theme.*
 import com.example.lab09.utils.*
 import com.example.lab09.ejercicio1.ui.*
@@ -124,6 +125,8 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     // Estado global para las recetas pre-cargadas
     var globalRecipes by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isPreparingData by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var downloadStatus by remember { mutableStateOf("") }
     
     // Guardar el idioma cuando cambie
     LaunchedEffect(currentLanguage.value) {
@@ -132,49 +135,110 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
         tts?.language = locale
     }
 
-    val urlBaseRecipes = "https://dummyjson.com/"
-    val retrofitRecipes = Retrofit.Builder().baseUrl(urlBaseRecipes)
-        .addConverterFactory(GsonConverterFactory.create()).build()
-    val servicioRecipes = retrofitRecipes.create(RecipeApiService::class.java)
-
-    val urlBaseMealDB = "https://www.themealdb.com/api/json/v1/1/"
-    val retrofitMealDB = Retrofit.Builder().baseUrl(urlBaseMealDB)
-        .addConverterFactory(GsonConverterFactory.create()).build()
-    val servicioMealDB = retrofitMealDB.create(com.example.lab09.ejercicio1.remote.MealDbApiService::class.java)
-
-    // Lógica de Pre-carga y Traducción (Optimizado)
-    LaunchedEffect(currentLanguage.value) {
-        if (currentLanguage.value.isNotEmpty()) {
-            try {
-                // 1. Carga inicial de datos
-                val response1 = servicioRecipes.getRecipes(limit = 50, skip = 0)
-                val recipes1 = response1.recipes ?: emptyList()
-                val response2 = servicioMealDB.getRecipes(limit = 50, skip = 0)
-                val recipes2 = response2.recipes ?: emptyList()
-                val rawRecipes = recipes1 + recipes2
-
-                // 2. Traducción IA (con el sistema de caché interno)
-                globalRecipes = if (currentLanguage.value == "es") {
-                    translateRecipesListAsync(rawRecipes, "es")
-                } else {
-                    rawRecipes
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                // Finalizar pantalla de carga si estaba activa
-                isPreparingData = false
-            }
-        }
-    }
-
     val navController = rememberNavController()
     val context = LocalContext.current
     val favoriteManager = remember { FavoriteManager(context) }
+    val cacheManager = remember { RecipeCacheManager(context) }
+    
     val favoritos = remember { 
         mutableStateListOf<Int>().apply { 
             addAll(favoriteManager.loadFavorites()) 
         } 
+    }
+
+    val urlBaseLocal = "https://recetasc24.loca.lt/"
+    
+    // Configurar OkHttp para saltar la advertencia de Localtunnel
+    val okHttpClient = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
+        val request = chain.request().newBuilder()
+            .addHeader("Bypass-Tunnel-Reminder", "true")
+            .addHeader("User-Agent", "Mozilla/5.0")
+            .build()
+        chain.proceed(request)
+    }.build()
+
+    val retrofitRecipes = Retrofit.Builder().baseUrl(urlBaseLocal)
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create()).build()
+    val servicioRecipes = retrofitRecipes.create(RecipeApiService::class.java)
+
+    // Lógica de Pre-carga, Traducción y Caché
+    LaunchedEffect(currentLanguage.value, isPreparingData) {
+        if (currentLanguage.value.isNotEmpty()) {
+            // Si hay caché y NO estamos en fase de preparación, cargar directo
+            if (cacheManager.hasCache() && !isPreparingData) {
+                globalRecipes = cacheManager.loadRecipes()
+                Log.d("OFFLINE", "Cargado desde caché existente")
+            } 
+            // Si estamos en fase de preparación (justo después de elegir idioma)
+            else if (isPreparingData) {
+                try {
+                    val isEs = currentLanguage.value == "es"
+                    Log.d("OFFLINE", "Iniciando descarga completa y traducción...")
+                    
+                    downloadProgress = 0.1f
+                    downloadStatus = if (isEs) "Obteniendo catálogo..." else "Fetching catalog..."
+                    
+                    // 1. Descargar de la API
+                    val rawRecipes = servicioRecipes.getRecipes()
+
+                    downloadProgress = 0.2f
+                    downloadStatus = if (isEs) "Traduciendo recetas..." else "Translating recipes..."
+
+                    // 2. Traducción IA
+                    var processedRecipes = if (isEs) {
+                        translateRecipesListAsync(rawRecipes, "es")
+                    } else {
+                        rawRecipes
+                    }
+                    
+                    // 3. Descargar imágenes para que funcionen 100% offline
+                    val total = processedRecipes.size
+                    processedRecipes = processedRecipes.mapIndexed { index, recipe ->
+                        downloadProgress = 0.2f + (0.7f * index / total)
+                        downloadStatus = if (isEs) "Descargando imágenes... ($index/$total)" else "Downloading images... ($index/$total)"
+                        
+                        var newImage = recipe.image
+                        if (recipe.image != null && recipe.image.startsWith("http")) {
+                            try {
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    val request = okhttp3.Request.Builder().url(recipe.image).build()
+                                    val response = okHttpClient.newCall(request).execute()
+                                    if (response.isSuccessful) {
+                                        val bytes = response.body?.bytes()
+                                        if (bytes != null) {
+                                            val fileName = "img_${recipe.id}.jpg"
+                                            val file = java.io.File(context.filesDir, fileName)
+                                            file.writeBytes(bytes)
+                                            newImage = "file://${file.absolutePath}"
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) { e.printStackTrace() }
+                        }
+                        recipe.copy(image = newImage)
+                    }
+
+                    downloadProgress = 0.95f
+                    downloadStatus = if (isEs) "Guardando base de datos..." else "Saving database..."
+                    
+                    globalRecipes = processedRecipes
+                    
+                    // 4. Guardar en Caché
+                    cacheManager.saveRecipes(globalRecipes)
+                    
+                    downloadProgress = 1.0f
+                    downloadStatus = if (isEs) "¡Listo para cocinar!" else "Ready to cook!"
+                    
+                    kotlinx.coroutines.delay(1000)
+                } catch (e: Exception) {
+                    Log.e("OFFLINE", "Error en sync inicial: ${e.message}")
+                    globalRecipes = cacheManager.loadRecipes()
+                } finally {
+                    isPreparingData = false // Fin de la pantalla de carga
+                }
+            }
+        }
     }
 
     // Persistir cambios automáticamente cada vez que la lista cambie
@@ -198,42 +262,19 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                 }
             }
             isPreparingData -> {
-                PreparingDataScreen(currentLanguage.value)
+                PreparingDataScreen(currentLanguage.value, downloadProgress, downloadStatus)
             }
             else -> {
-                Contenido(paddingValues, navController, servicioRecipes, servicioMealDB, favoritos, tts, onSpeechFinished, currentLanguage, globalRecipes)
+                Contenido(paddingValues, navController, servicioRecipes, favoritos, tts, onSpeechFinished, currentLanguage, globalRecipes)
             }
         }
     }
 }
 
 @Composable
-fun PreparingDataScreen(lang: String) {
+fun PreparingDataScreen(lang: String, progress: Float, statusText: String) {
     val isEs = lang == "es"
     val infiniteTransition = rememberInfiniteTransition(label = "loading")
-    
-    // Ciclo de mensajes divertidos
-    val messages = if (isEs) listOf(
-        "Afilando los cuchillos...",
-        "Precalentando el horno...",
-        "Sazonando las recetas...",
-        "IA de Google cocinando...",
-        "Emplatando la experiencia..."
-    ) else listOf(
-        "Sharpening the knives...",
-        "Preheating the oven...",
-        "Seasoning the recipes...",
-        "Google IA is cooking...",
-        "Plating the experience..."
-    )
-    
-    var currentMessageIndex by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while(true) {
-            kotlinx.coroutines.delay(2000)
-            currentMessageIndex = (currentMessageIndex + 1) % messages.size
-        }
-    }
 
     // Animación de escala para el chef
     val scale by infiniteTransition.animateFloat(
@@ -269,7 +310,8 @@ fun PreparingDataScreen(lang: String) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(24.dp)
         ) {
             // Contenedor del Chef con Efecto de "Vapor"
             Box(contentAlignment = Alignment.TopCenter) {
@@ -318,41 +360,37 @@ fun PreparingDataScreen(lang: String) {
             
             Spacer(Modifier.height(40.dp))
             
-            // Barra de progreso más sutil
+            // Barra de progreso y porcentaje
+            Text(
+                text = "${(progress * 100).toInt()}%",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                color = Primary
+            )
+            Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
+                progress = { progress },
                 color = Primary,
                 trackColor = Surface,
                 modifier = Modifier
-                    .width(200.dp)
-                    .height(6.dp)
+                    .fillMaxWidth()
+                    .height(8.dp)
                     .clip(RoundedCornerShape(10.dp))
             )
             
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
             
-            // Texto principal animado por el cambio de índice
-            androidx.compose.animation.AnimatedContent(
-                targetState = messages[currentMessageIndex],
-                transitionSpec = {
-                    (fadeIn() + slideInVertically { it }).togetherWith(fadeOut() + slideOutVertically { -it })
-                },
-                label = "message"
-            ) { text ->
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp
-                    ),
-                    color = OnBackground,
-                    textAlign = TextAlign.Center
-                )
-            }
+            // Texto de estado dinámico
+            Text(
+                text = statusText.ifEmpty { if (isEs) "Conectando..." else "Connecting..." },
+                style = MaterialTheme.typography.titleMedium,
+                color = OnBackground,
+                textAlign = TextAlign.Center
+            )
             
             Spacer(Modifier.height(12.dp))
             
             Text(
-                if(isEs) "Configurando tu cocina personal" else "Setting up your personal kitchen",
+                if(isEs) "Configurando tu cocina offline" else "Setting up your offline kitchen",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextMuted,
                 fontWeight = FontWeight.Medium
@@ -540,7 +578,6 @@ fun Contenido(
     pv: PaddingValues,
     navController: NavHostController,
     servicioRecipes: RecipeApiService,
-    servicioMealDB: MealDbApiService,
     favoritos: MutableList<Int>,
     tts: TextToSpeech?,
     onSpeechFinished: MutableState<(() -> Unit)?>,
@@ -574,19 +611,19 @@ fun Contenido(
         ) {
             composable("inicio") { ScreenInicio() }
             composable("recetas") { ScreenRecipeMenu(navController, currentLanguage) }
-            composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, servicioMealDB, favoritos, currentLanguage, preloadedRecipes) }
-            composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, servicioMealDB, favoritos, currentLanguage) }
+            composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, favoritos, currentLanguage, preloadedRecipes) }
+            composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, favoritos, currentLanguage, preloadedRecipes) }
             composable("recipeDetail/{id}", arguments = listOf(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                ScreenRecipeDetail(navController, servicioRecipes, servicioMealDB, id, favoritos, currentLanguage)
+                ScreenRecipeDetail(navController, servicioRecipes, id, favoritos, currentLanguage, preloadedRecipes)
             }
             composable("cookingMode/{id}", arguments = listOf(
                 navArgument("id") { type = NavType.IntType }
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
-                ScreenCookingMode(navController, servicioRecipes, servicioMealDB, id, tts, onSpeechFinished, currentLanguage)
+                ScreenCookingMode(navController, servicioRecipes, id, tts, onSpeechFinished, currentLanguage, preloadedRecipes)
             }
         }
     }

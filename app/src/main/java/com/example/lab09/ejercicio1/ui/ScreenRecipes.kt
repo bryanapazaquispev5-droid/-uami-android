@@ -53,7 +53,6 @@ import com.example.lab09.utils.translateRecipeAsync
 import coil.compose.rememberAsyncImagePainter
 import com.example.lab09.ejercicio1.models.RecipeModel
 import com.example.lab09.ejercicio1.remote.RecipeApiService
-import com.example.lab09.ejercicio1.remote.MealDbApiService
 import com.example.lab09.ui.theme.*
 import java.util.Locale
 import android.speech.tts.TextToSpeech
@@ -133,7 +132,6 @@ fun ScreenRecipeMenu(navController: NavHostController, currentLanguage: MutableS
 fun ScreenRecipes(
     navController: NavHostController, 
     servicio: RecipeApiService, 
-    servicioMealDB: MealDbApiService, 
     favoritos: MutableList<Int>, 
     currentLanguage: MutableState<String>,
     preloadedRecipes: List<RecipeModel> = emptyList()
@@ -150,32 +148,20 @@ fun ScreenRecipes(
     var selectedDifficulty by remember { mutableStateOf("All") } 
     var selectedCuisine by remember { mutableStateOf("All") }
 
-    // Cargar todas las recetas de ambas fuentes (SOLO si no hay pre-cargadas o si se refresca)
-    LaunchedEffect(isRefreshing, currentLanguage.value) {
-        if (allRecipes.isNotEmpty() && !isRefreshing) return@LaunchedEffect
-        
-        isLoading = true
-        try {
-            // 1. Obtener de DummyJSON
-            val response1 = servicio.getRecipes(limit = 50, skip = 0)
-            val recipes1 = response1.recipes ?: emptyList()
-            
-            // 2. Obtener de TheMealDB
-            val response2 = servicioMealDB.getRecipes(limit = 50, skip = 0)
-            val recipes2 = response2.recipes ?: emptyList()
-            
-            // 3. Combinar
-            val rawRecipes = recipes1 + recipes2
-            
-            allRecipes = if (currentLanguage.value == "es") {
-                translateRecipesListAsync(rawRecipes, "es")
-            } else {
-                rawRecipes
-            }
-        } catch (e: Exception) {
-            Log.e("RECIPES_UI", "Error: ${e.message}")
-        } finally {
+    // Reaccionar cuando se pasan recetas cargadas desde caché en MainActivity
+    LaunchedEffect(preloadedRecipes) {
+        if (preloadedRecipes.isNotEmpty()) {
+            allRecipes = preloadedRecipes
             isLoading = false
+        }
+    }
+
+    // Ya no hacemos llamadas a la API aquí. 
+    // Todo proviene de preloadedRecipes que se descargó al elegir el idioma.
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
+            // Simular refresco para la UI, pero usando datos locales
+            kotlinx.coroutines.delay(500)
             isRefreshing = false
         }
     }
@@ -446,41 +432,24 @@ fun ScreenRecipes(
 }
 
 @Composable
-fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService, servicioMealDB: MealDbApiService, favoritos: List<Int>, currentLanguage: MutableState<String>) {
+fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService, favoritos: List<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
     val isEs = currentLanguage.value == "es"
     var listaFavoritos by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(favoritos.size, currentLanguage.value) {
+    LaunchedEffect(favoritos.size, currentLanguage.value, preloadedRecipes) {
         isLoading = true
         val listadoRaw = mutableListOf<RecipeModel>()
+        
         favoritos.forEach { id ->
-            try {
-                // Intentar en ambas fuentes (DummyJSON y TheMealDB)
-                val recipe1 = servicio.getRecipeById(id)
-                
-                if (recipe1 != null) {
-                    listadoRaw.add(recipe1)
-                } else {
-                    val response2 = servicioMealDB.getRecipeById(id)
-                    val recipe2 = response2.recipes?.firstOrNull()
-                    if (recipe2 != null) listadoRaw.add(recipe2)
-                }
-            } catch (e: Exception) { 
-                // Si falla en una, intentar en la otra
-                try {
-                    val response2 = servicioMealDB.getRecipeById(id)
-                    val recipe2 = response2.recipes?.firstOrNull()
-                    if (recipe2 != null) listadoRaw.add(recipe2)
-                } catch (e2: Exception) { e2.printStackTrace() }
+            // Buscar estrictamente en el caché local (modo offline puro)
+            val cachedRecipe = preloadedRecipes.find { it.id == id }
+            if (cachedRecipe != null) {
+                listadoRaw.add(cachedRecipe)
             }
         }
         
-        listaFavoritos = if (currentLanguage.value == "es") {
-            translateRecipesListAsync(listadoRaw, "es")
-        } else {
-            listadoRaw
-        }
+        listaFavoritos = listadoRaw
         isLoading = false
     }
 
@@ -644,39 +613,21 @@ fun RecipeCardPremium(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiService, servicioMealDB: MealDbApiService, id: Int, favoritos: MutableList<Int>, currentLanguage: MutableState<String>) {
+fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiService, id: Int, favoritos: MutableList<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(id, currentLanguage.value) {
+    LaunchedEffect(id, currentLanguage.value, preloadedRecipes) {
         isLoading = true
         try { 
-            // Intentar buscar el ID en ambas APIs
-            val rawRecipe1 = servicio.getRecipeById(id)
+            // Buscar estrictamente en nuestro caché local (que ya está traducido) para modo offline puro
+            val cachedRecipe = preloadedRecipes.find { it.id == id }
             
-            val finalRecipe = if (rawRecipe1 != null && rawRecipe1.name != "Receta sin nombre") {
-                rawRecipe1
-            } else {
-                val response2 = servicioMealDB.getRecipeById(id)
-                response2.recipes?.firstOrNull()
-            }
-
-            recipe = if (currentLanguage.value == "es" && finalRecipe != null) {
-                translateRecipeAsync(finalRecipe, "es")
-            } else {
-                finalRecipe
+            if (cachedRecipe != null) {
+                recipe = cachedRecipe
             }
         } catch (e: Exception) { 
-            // Reintento en la segunda API si la primera falla catastróficamente
-            try {
-                val response2 = servicioMealDB.getRecipeById(id)
-                val finalRecipe = response2.recipes?.firstOrNull()
-                recipe = if (currentLanguage.value == "es" && finalRecipe != null) {
-                    translateRecipeAsync(finalRecipe, "es")
-                } else {
-                    finalRecipe
-                }
-            } catch (e2: Exception) { e2.printStackTrace() }
+            e.printStackTrace()
         }
         finally { isLoading = false }
     }
@@ -797,42 +748,26 @@ fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiServ
 fun ScreenCookingMode(
     navController: NavHostController, 
     servicio: RecipeApiService, 
-    servicioMealDB: MealDbApiService,
     id: Int,
     tts: TextToSpeech?,
     onSpeechFinished: MutableState<(() -> Unit)?>,
-    currentLanguage: MutableState<String>
+    currentLanguage: MutableState<String>,
+    preloadedRecipes: List<RecipeModel>
 ) {
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(id, currentLanguage.value) {
+    LaunchedEffect(id, currentLanguage.value, preloadedRecipes) {
         isLoading = true
         try { 
-            val rawRecipe1 = servicio.getRecipeById(id)
+            // Modo Offline Estricto: Buscar solo en caché
+            val cachedRecipe = preloadedRecipes.find { it.id == id }
             
-            val finalRecipe = if (rawRecipe1 != null && rawRecipe1.name != "Receta sin nombre") {
-                rawRecipe1
-            } else {
-                val response2 = servicioMealDB.getRecipeById(id)
-                response2.recipes?.firstOrNull()
-            }
-
-            recipe = if (currentLanguage.value == "es" && finalRecipe != null) {
-                translateRecipeAsync(finalRecipe, "es")
-            } else {
-                finalRecipe
+            if (cachedRecipe != null) {
+                recipe = cachedRecipe
             }
         } catch (e: Exception) { 
-            try {
-                val response2 = servicioMealDB.getRecipeById(id)
-                val finalRecipe = response2.recipes?.firstOrNull()
-                recipe = if (currentLanguage.value == "es" && finalRecipe != null) {
-                    translateRecipeAsync(finalRecipe, "es")
-                } else {
-                    finalRecipe
-                }
-            } catch (e2: Exception) { e2.printStackTrace() }
+            e.printStackTrace()
         }
         finally { isLoading = false }
     }

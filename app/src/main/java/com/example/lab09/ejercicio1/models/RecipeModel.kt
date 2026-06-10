@@ -5,10 +5,6 @@ import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 import java.lang.reflect.Type
 
-data class RecipeResponse(
-    @SerializedName(value = "meals", alternate = ["recipes"]) val recipes: List<RecipeModel>?
-)
-
 @JsonAdapter(RecipeModelDeserializer::class)
 data class RecipeModel(
     val id: Int?,
@@ -29,45 +25,52 @@ class RecipeModelDeserializer : JsonDeserializer<RecipeModel> {
     override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext): RecipeModel {
         val obj = if (json.isJsonObject) json.asJsonObject else JsonObject()
         
-        // Mapeo básico de TheMealDB a nuestro modelo
-        val idMeal = if (obj.has("idMeal") && !obj.get("idMeal").isJsonNull) obj.get("idMeal").asString else null
-        val id = idMeal?.toIntOrNull() ?: if (obj.has("id") && !obj.get("id").isJsonNull) obj.get("id").asInt else null
+        // Mapeo para la nueva API Django
+        val id = if (obj.has("id") && !obj.get("id").isJsonNull) obj.get("id").asInt else null
+        val name = if (obj.has("name") && !obj.get("name").isJsonNull) obj.get("name").asString else "Receta sin nombre"
         
-        val name = if (obj.has("strMeal") && !obj.get("strMeal").isJsonNull) obj.get("strMeal").asString else if (obj.has("name") && !obj.get("name").isJsonNull) obj.get("name").asString else "Receta sin nombre"
-        val image = if (obj.has("strMealThumb") && !obj.get("strMealThumb").isJsonNull) obj.get("strMealThumb").asString else if (obj.has("image") && !obj.get("image").isJsonNull) obj.get("image").asString else null
-        val cuisine = if (obj.has("strArea") && !obj.get("strArea").isJsonNull) obj.get("strArea").asString else if (obj.has("cuisine") && !obj.get("cuisine").isJsonNull) obj.get("cuisine").asString else "International"
-        val difficulty = if (obj.has("difficulty") && !obj.get("difficulty").isJsonNull) obj.get("difficulty").asString else "Medium"
-
-        // Procesar instrucciones
-        val instructionsRaw = if (obj.has("strInstructions") && !obj.get("strInstructions").isJsonNull) obj.get("strInstructions").asString else null
-        val instructions = if (instructionsRaw != null) {
-            instructionsRaw.split("\r\n", "\n")
-                .filter { it.trim().isNotEmpty() }
-        } else {
-            val list = mutableListOf<String>()
-            if (obj.has("instructions") && obj.get("instructions").isJsonArray) {
-                obj.get("instructions").asJsonArray.forEach { list.add(it.asString) }
+        // Procesar instrucciones (puede venir como String de la API o Array del caché)
+        val instructions = mutableListOf<String>()
+        if (obj.has("instructions") && !obj.get("instructions").isJsonNull) {
+            val element = obj.get("instructions")
+            if (element.isJsonArray) {
+                element.asJsonArray.forEach { instructions.add(it.asString) }
+            } else {
+                element.asString.split("\n").filter { it.trim().isNotEmpty() }.forEach { instructions.add(it) }
             }
-            list
         }
 
-        // Procesar ingredientes
+        // Procesar ingredientes (puede venir como String de la API o Array del caché)
         val ingredients = mutableListOf<String>()
-        for (i in 1..20) {
-            val ingKey = "strIngredient$i"
-            val measKey = "strMeasure$i"
-            if (obj.has(ingKey) && !obj.get(ingKey).isJsonNull) {
-                val ingredient = obj.get(ingKey).asString
-                val measure = if (obj.has(measKey) && !obj.get(measKey).isJsonNull) obj.get(measKey).asString else ""
-                if (ingredient.isNotBlank()) {
-                    val fullIngredient = if (measure.isNotBlank()) "$measure $ingredient" else ingredient
-                    ingredients.add(fullIngredient)
-                }
+        if (obj.has("ingredients") && !obj.get("ingredients").isJsonNull) {
+            val element = obj.get("ingredients")
+            if (element.isJsonArray) {
+                element.asJsonArray.forEach { ingredients.add(it.asString) }
+            } else {
+                element.asString.split("\n").filter { it.trim().isNotEmpty() }.forEach { ingredients.add(it) }
             }
         }
+
+        val prepTime = if (obj.has("prepTimeMinutes") && !obj.get("prepTimeMinutes").isJsonNull) obj.get("prepTimeMinutes").asInt 
+                       else if (obj.has("prep_time") && !obj.get("prep_time").isJsonNull) obj.get("prep_time").asInt else 15
         
-        if (ingredients.isEmpty() && obj.has("ingredients") && obj.get("ingredients").isJsonArray) {
-            obj.get("ingredients").asJsonArray.forEach { ingredients.add(it.asString) }
+        val cookTime = if (obj.has("cookTimeMinutes") && !obj.get("cookTimeMinutes").isJsonNull) obj.get("cookTimeMinutes").asInt 
+                       else if (obj.has("cook_time") && !obj.get("cook_time").isJsonNull) obj.get("cook_time").asInt else 30
+                       
+        val difficulty = if (obj.has("difficulty") && !obj.get("difficulty").isJsonNull) obj.get("difficulty").asString else "Medium"
+        val category = if (obj.has("cuisine") && !obj.get("cuisine").isJsonNull) obj.get("cuisine").asString 
+                       else if (obj.has("category") && !obj.get("category").isJsonNull) obj.get("category").asString else "International"
+        
+        // Manejar URL de imagen (reemplazar localhost/IP por la URL del túnel público de forma segura)
+        var image = if (obj.has("image") && !obj.get("image").isJsonNull) obj.get("image").asString else null
+        if (image != null) {
+            // Extraer solo la parte final de la ruta (ej: /media/recipes/foto.jpg)
+            val pathIndex = image.indexOf("/media/")
+            if (pathIndex != -1) {
+                val imagePath = image.substring(pathIndex)
+                // Forzar el uso de la URL pública actual
+                image = "https://recetasc24.loca.lt$imagePath"
+            }
         }
 
         return RecipeModel(
@@ -75,14 +78,14 @@ class RecipeModelDeserializer : JsonDeserializer<RecipeModel> {
             name = name,
             ingredients = ingredients,
             instructions = instructions,
-            prepTimeMinutes = if (obj.has("prepTimeMinutes") && !obj.get("prepTimeMinutes").isJsonNull) obj.get("prepTimeMinutes").asInt else 15,
-            cookTimeMinutes = if (obj.has("cookTimeMinutes") && !obj.get("cookTimeMinutes").isJsonNull) obj.get("cookTimeMinutes").asInt else 20,
+            prepTimeMinutes = prepTime,
+            cookTimeMinutes = cookTime,
             difficulty = difficulty,
-            cuisine = cuisine,
+            cuisine = category,
             image = image,
-            rating = if (obj.has("rating") && !obj.get("rating").isJsonNull) obj.get("rating").asDouble else 4.5,
+            rating = 5.0,
             difficultyEn = difficulty,
-            cuisineEn = cuisine
+            cuisineEn = category
         )
     }
 }
