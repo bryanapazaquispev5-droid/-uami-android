@@ -1,7 +1,6 @@
 package com.example.lab09.utils
 
 import com.example.lab09.ejercicio1.models.RecipeModel
-import com.example.lab09.models.PostModel
 
 fun translateText(text: String?, targetLanguage: String): String {
     if (text == null) return ""
@@ -164,15 +163,3 @@ suspend fun translateRecipesListAsync(recipes: List<RecipeModel>, targetLanguage
     return recipes.map { translateRecipeAsync(it, targetLanguage) }
 }
 
-suspend fun translatePostAsync(post: PostModel, targetLanguage: String): PostModel {
-    if (targetLanguage != "es") return post
-    return post.copy(
-        title = OnDeviceTranslator.translate(post.title),
-        body = OnDeviceTranslator.translate(post.body)
-    )
-}
-
-suspend fun translatePostsListAsync(posts: List<PostModel>, targetLanguage: String): List<PostModel> {
-    if (targetLanguage != "es") return posts
-    return posts.map { translatePostAsync(it, targetLanguage) }
-}

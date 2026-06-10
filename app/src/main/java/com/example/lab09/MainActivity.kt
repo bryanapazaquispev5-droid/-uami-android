@@ -36,7 +36,6 @@ import androidx.navigation.navArgument
 import com.example.lab09.ejercicio1.remote.RecipeApiService
 import com.example.lab09.ejercicio1.remote.MealDbApiService
 import com.example.lab09.ejercicio1.models.RecipeModel
-import com.example.lab09.remote.PostApiService
 import com.example.lab09.ui.theme.*
 import com.example.lab09.utils.*
 import com.example.lab09.ejercicio1.ui.*
@@ -133,11 +132,6 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
         tts?.language = locale
     }
 
-    val urlBasePosts = "https://json-placeholder.mock.beeceptor.com/"
-    val retrofitPosts = Retrofit.Builder().baseUrl(urlBasePosts)
-        .addConverterFactory(GsonConverterFactory.create()).build()
-    val servicioPosts = retrofitPosts.create(PostApiService::class.java)
-
     val urlBaseRecipes = "https://dummyjson.com/"
     val retrofitRecipes = Retrofit.Builder().baseUrl(urlBaseRecipes)
         .addConverterFactory(GsonConverterFactory.create()).build()
@@ -207,7 +201,7 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                 PreparingDataScreen(currentLanguage.value)
             }
             else -> {
-                Contenido(paddingValues, navController, servicioPosts, servicioRecipes, servicioMealDB, favoritos, tts, onSpeechFinished, currentLanguage, globalRecipes)
+                Contenido(paddingValues, navController, servicioRecipes, servicioMealDB, favoritos, tts, onSpeechFinished, currentLanguage, globalRecipes)
             }
         }
     }
@@ -505,12 +499,6 @@ fun CustomBottomBar(navController: NavHostController) {
                 onClick = { navController.navigate("inicio") }
             )
             BottomNavItem(
-                icon = Icons.Rounded.Favorite,
-                label = "Feed",
-                selected = currentRoute == "posts",
-                onClick = { navController.navigate("posts") }
-            )
-            BottomNavItem(
                 icon = Icons.Rounded.RestaurantMenu,
                 label = "Recetas",
                 selected = currentRoute == "recetas",
@@ -551,7 +539,6 @@ fun BottomNavItem(icon: ImageVector, label: String, selected: Boolean, onClick: 
 fun Contenido(
     pv: PaddingValues,
     navController: NavHostController,
-    servicioPosts: PostApiService,
     servicioRecipes: RecipeApiService,
     servicioMealDB: MealDbApiService,
     favoritos: MutableList<Int>,
@@ -586,13 +573,6 @@ fun Contenido(
             }
         ) {
             composable("inicio") { ScreenInicio() }
-            composable("posts") { ScreenPosts(navController, servicioPosts, currentLanguage) }
-            composable("postsVer/{id}", arguments = listOf(
-                navArgument("id") { type = NavType.IntType }
-            )) {
-                val id = it.arguments?.getInt("id") ?: 0
-                ScreenPost(navController, servicioPosts, id, currentLanguage)
-            }
             composable("recetas") { ScreenRecipeMenu(navController, currentLanguage) }
             composable("recetas_lista") { ScreenRecipes(navController, servicioRecipes, servicioMealDB, favoritos, currentLanguage, preloadedRecipes) }
             composable("recetas_favoritos") { ScreenFavorites(navController, servicioRecipes, servicioMealDB, favoritos, currentLanguage) }
