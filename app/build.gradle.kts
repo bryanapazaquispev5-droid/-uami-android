@@ -37,6 +37,11 @@ android {
     buildFeatures {
         compose = true
     }
+
+    @Suppress("DEPRECATION")
+    aaptOptions {
+        noCompress("bin")
+    }
 }
 
 dependencies {

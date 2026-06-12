@@ -24,6 +24,15 @@ fun translateText(text: String?, targetLanguage: String): String {
         "Spanish" to "Española",
         "Moroccan" to "Marroquí",
         
+        // Tipos de comida / Meal types
+        "Breakfast" to "Desayuno",
+        "Lunch" to "Almuerzo",
+        "Dinner" to "Cena",
+        "Dessert" to "Postre",
+        "Beverage" to "Bebida",
+        "Appetizer" to "Entrada",
+        "Snack" to "Snack",
+        
         // Niveles
         "Easy" to "Fácil",
         "Medium" to "Media",

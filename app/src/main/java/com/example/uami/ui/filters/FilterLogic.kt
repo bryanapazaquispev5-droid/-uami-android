@@ -32,7 +32,9 @@ object FilterLogic {
 
         // 4. Filtro de Tipo de Plato
         if (state.selectedMealType != "All") {
-            result = result.filter { it.mealTypeEn?.equals(state.selectedMealType, ignoreCase = true) == true }
+            result = result.filter { recipe ->
+                recipe.mealTypeEn?.split(",")?.map { it.trim() }?.any { it.equals(state.selectedMealType, ignoreCase = true) } == true
+            }
         }
 
         // 5. Ordenamiento

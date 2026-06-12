@@ -323,7 +323,11 @@ fun ScreenRecipes(
                                         allRecipes.mapNotNull { it.cuisineEn }.distinct().sorted()
                                     },
                                     availableMealTypes = remember(allRecipes) {
-                                        allRecipes.mapNotNull { it.mealTypeEn }.distinct().sorted()
+                                        allRecipes.flatMap { it.mealTypeEn?.split(",") ?: emptyList() }
+                                            .map { it.trim() }
+                                            .filter { it.isNotEmpty() }
+                                            .distinct()
+                                            .sorted()
                                     },
                                     onDismiss = { showFilterSheet = false }
                                 )

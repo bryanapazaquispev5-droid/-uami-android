@@ -325,6 +325,7 @@ fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableSt
 
             Box(
                 modifier = Modifier
+                    .align(Alignment.CenterStart)
                     .offset(x = pillOffset)
                     .width(itemWidth)
                     .height(44.dp)
@@ -338,28 +339,34 @@ fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableSt
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().align(Alignment.Center),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BottomNavItem(
-                    icon = Icons.Rounded.Explore,
-                    label = if (currentLanguage.value == "es") "Explorar" else "Explore",
-                    selected = selectedIndex == 0,
-                    onClick = { navController.navigate("inicio") }
-                )
-                BottomNavItem(
-                    icon = Icons.Rounded.RestaurantMenu,
-                    label = if (currentLanguage.value == "es") "Recetas" else "Recipes",
-                    selected = selectedIndex == 1,
-                    onClick = { navController.navigate("recetas") }
-                )
-                BottomNavItem(
-                    icon = Icons.Rounded.Psychology,
-                    label = if (currentLanguage.value == "es") "Nutriólogo" else "Nutrition",
-                    selected = selectedIndex == 2,
-                    onClick = { navController.navigate("nutriologo") }
-                )
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    BottomNavItem(
+                        icon = Icons.Rounded.Explore,
+                        label = if (currentLanguage.value == "es") "Explorar" else "Explore",
+                        selected = selectedIndex == 0,
+                        onClick = { navController.navigate("inicio") }
+                    )
+                }
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    BottomNavItem(
+                        icon = Icons.Rounded.RestaurantMenu,
+                        label = if (currentLanguage.value == "es") "Recetas" else "Recipes",
+                        selected = selectedIndex == 1,
+                        onClick = { navController.navigate("recetas") }
+                    )
+                }
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    BottomNavItem(
+                        icon = Icons.Rounded.Psychology,
+                        label = if (currentLanguage.value == "es") "Nutriólogo" else "Nutrition",
+                        selected = selectedIndex == 2,
+                        onClick = { navController.navigate("nutriologo") }
+                    )
+                }
             }
         }
     }
@@ -405,7 +412,7 @@ fun BottomNavItem(icon: ImageVector, label: String, selected: Boolean, onClick: 
             modifier = modifier
                 .clip(RoundedCornerShape(20.dp))
                 .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 8.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -428,11 +435,14 @@ fun BottomNavItem(icon: ImageVector, label: String, selected: Boolean, onClick: 
                 ) {
                     Text(
                         text = label,
-                        modifier = Modifier.padding(start = 8.dp),
+                        modifier = Modifier.padding(start = 4.dp),
                         color = contentColor,
+                        maxLines = 1,
+                        softWrap = false,
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.2.sp,
+                            fontSize = 12.sp
                         )
                     )
                 }
@@ -576,11 +586,74 @@ fun ScreenInicio(
         } else null
     }
 
-    // 3. Selección de recetas destacadas
-    val recetasDestacadas = remember(preloadedRecipes) {
-        if (preloadedRecipes.isNotEmpty()) {
-            preloadedRecipes.take(6)
-        } else emptyList()
+    // 3. Selección de recetas recomendadas (con IA Local cuando esté disponible)
+    val context = LocalContext.current
+    val nutritionistManager = remember { NutritionistAIManager(context) }
+    val isModelReady by nutritionistManager.isModelReady.collectAsState()
+
+    var recetasDestacadas by remember(preloadedRecipes) {
+        mutableStateOf(
+            if (preloadedRecipes.isNotEmpty()) {
+                val favorites = preloadedRecipes.filter { favoritos.contains(it.id) }
+                val recommendations = favorites.take(6).toMutableList()
+                if (recommendations.size < 6) {
+                    val nonFavorites = preloadedRecipes.filter { !favoritos.contains(it.id) }
+                    recommendations.addAll(nonFavorites.take(6 - recommendations.size))
+                }
+                recommendations.ifEmpty { preloadedRecipes.take(6) }
+            } else emptyList()
+        )
+    }
+
+    LaunchedEffect(preloadedRecipes, favoritos, isModelReady) {
+        if (preloadedRecipes.isNotEmpty() && isModelReady) {
+            nutritionistManager.initializeLLM()
+            recetasDestacadas = nutritionistManager.generateAIRecommendations(preloadedRecipes, favoritos, isEs)
+        }
+    }
+
+    // 4. Conteo de recetas por categorías
+    val countBreakfast = remember(preloadedRecipes) {
+        preloadedRecipes.count { 
+            val mte = it.mealTypeEn?.lowercase() ?: ""
+            val mt = it.mealType?.lowercase() ?: ""
+            mte.contains("breakfast") || mt.contains("desayuno")
+        }
+    }
+    val countLunch = remember(preloadedRecipes) {
+        preloadedRecipes.count { 
+            val mte = it.mealTypeEn?.lowercase() ?: ""
+            val mt = it.mealType?.lowercase() ?: ""
+            mte.contains("lunch") || mt.contains("almuerzo")
+        }
+    }
+    val countDinner = remember(preloadedRecipes) {
+        preloadedRecipes.count { 
+            val mte = it.mealTypeEn?.lowercase() ?: ""
+            val mt = it.mealType?.lowercase() ?: ""
+            mte.contains("dinner") || mt.contains("cena")
+        }
+    }
+    val countDessert = remember(preloadedRecipes) {
+        preloadedRecipes.count { 
+            val mte = it.mealTypeEn?.lowercase() ?: ""
+            val mt = it.mealType?.lowercase() ?: ""
+            mte.contains("dessert") || mt.contains("postre")
+        }
+    }
+    val countBeverage = remember(preloadedRecipes) {
+        preloadedRecipes.count { 
+            val mte = it.mealTypeEn?.lowercase() ?: ""
+            val mt = it.mealType?.lowercase() ?: ""
+            mte.contains("beverage") || mt.contains("bebida")
+        }
+    }
+    val countAppetizer = remember(preloadedRecipes) {
+        preloadedRecipes.count { 
+            val mte = it.mealTypeEn?.lowercase() ?: ""
+            val mt = it.mealType?.lowercase() ?: ""
+            mte.contains("appetizer") || mt.contains("entrada")
+        }
     }
 
     Column(
@@ -833,6 +906,7 @@ fun ScreenInicio(
             CategoryItem(
                 icon = Icons.Rounded.BakeryDining,
                 label = if (isEs) "Desayuno" else "Breakfast",
+                subtitle = if (isEs) "$countBreakfast recetas" else "$countBreakfast recipes",
                 modifier = Modifier.weight(1f)
             ) {
                 navController.navigate("recetas_lista?mealType=Breakfast")
@@ -840,6 +914,7 @@ fun ScreenInicio(
             CategoryItem(
                 icon = Icons.Rounded.LunchDining,
                 label = if (isEs) "Almuerzo" else "Lunch",
+                subtitle = if (isEs) "$countLunch recetas" else "$countLunch recipes",
                 modifier = Modifier.weight(1f)
             ) {
                 navController.navigate("recetas_lista?mealType=Lunch")
@@ -853,16 +928,40 @@ fun ScreenInicio(
             CategoryItem(
                 icon = Icons.Rounded.DinnerDining,
                 label = if (isEs) "Cena" else "Dinner",
+                subtitle = if (isEs) "$countDinner recetas" else "$countDinner recipes",
                 modifier = Modifier.weight(1f)
             ) {
                 navController.navigate("recetas_lista?mealType=Dinner")
             }
             CategoryItem(
                 icon = Icons.Rounded.Icecream,
-                label = if (isEs) "Snacks" else "Snacks",
+                label = if (isEs) "Postres" else "Desserts",
+                subtitle = if (isEs) "$countDessert recetas" else "$countDessert recipes",
                 modifier = Modifier.weight(1f)
             ) {
-                navController.navigate("recetas_lista?mealType=Snack")
+                navController.navigate("recetas_lista?mealType=Dessert")
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CategoryItem(
+                icon = Icons.Rounded.LocalDrink,
+                label = if (isEs) "Bebidas" else "Beverages",
+                subtitle = if (isEs) "$countBeverage recetas" else "$countBeverage recipes",
+                modifier = Modifier.weight(1f)
+            ) {
+                navController.navigate("recetas_lista?mealType=Beverage")
+            }
+            CategoryItem(
+                icon = Icons.Rounded.Fastfood,
+                label = if (isEs) "Entradas" else "Appetizers",
+                subtitle = if (isEs) "$countAppetizer recetas" else "$countAppetizer recipes",
+                modifier = Modifier.weight(1f)
+            ) {
+                navController.navigate("recetas_lista?mealType=Appetizer")
             }
         }
 
@@ -958,6 +1057,7 @@ fun CategoryItem(
     icon: ImageVector, 
     label: String, 
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1000,7 +1100,15 @@ fun CategoryItem(
                     .bobbingAnimation(durationMillis = 1600 + (label.hashCode() % 400), dy = 5f)
             )
             Spacer(Modifier.height(8.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = OnSurface)
+            Text(label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = OnSurface)
+            if (subtitle != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = TextMuted
+                )
+            }
         }
     }
 }
