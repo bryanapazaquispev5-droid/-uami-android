@@ -1,4 +1,4 @@
-package com.example.lab09.ejercicio1.models
+package com.example.uami.ejercicio1.models
 
 import com.google.gson.*
 import com.google.gson.annotations.JsonAdapter

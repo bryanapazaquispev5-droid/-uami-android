@@ -1,4 +1,4 @@
-package com.example.lab09
+package com.example.uami
 
 import android.util.Log
 import android.os.Bundle
@@ -37,12 +37,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.lab09.ejercicio1.remote.RecipeApiService
-import com.example.lab09.ejercicio1.models.RecipeModel
-import com.example.lab09.utils.RecipeCacheManager
-import com.example.lab09.ui.theme.*
-import com.example.lab09.utils.*
-import com.example.lab09.ejercicio1.ui.*
+import com.example.uami.ejercicio1.remote.RecipeApiService
+import com.example.uami.ejercicio1.models.RecipeModel
+import com.example.uami.utils.RecipeCacheManager
+import com.example.uami.ui.theme.*
+import com.example.uami.utils.*
+import com.example.uami.ejercicio1.ui.*
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 

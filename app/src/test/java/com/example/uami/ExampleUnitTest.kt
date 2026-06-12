@@ -1,4 +1,4 @@
-package com.example.lab09
+package com.example.uami
 
 import org.junit.Test
 

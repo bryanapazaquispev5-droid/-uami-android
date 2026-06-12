@@ -1,4 +1,4 @@
-package com.example.lab09.models
+package com.example.uami.models
 
 data class UserModel(
     val id: Int,

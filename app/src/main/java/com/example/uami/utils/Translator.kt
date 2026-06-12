@@ -1,6 +1,6 @@
-package com.example.lab09.utils
+package com.example.uami.utils
 
-import com.example.lab09.ejercicio1.models.RecipeModel
+import com.example.uami.ejercicio1.models.RecipeModel
 
 fun translateText(text: String?, targetLanguage: String): String {
     if (text == null) return ""

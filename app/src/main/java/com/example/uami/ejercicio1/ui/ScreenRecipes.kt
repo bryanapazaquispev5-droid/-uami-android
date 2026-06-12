@@ -1,4 +1,4 @@
-package com.example.lab09.ejercicio1.ui
+package com.example.uami.ejercicio1.ui
 
 import android.os.Bundle
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -47,13 +47,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
-import com.example.lab09.utils.translateText
-import com.example.lab09.utils.translateRecipesListAsync
-import com.example.lab09.utils.translateRecipeAsync
+import com.example.uami.utils.translateText
+import com.example.uami.utils.translateRecipesListAsync
+import com.example.uami.utils.translateRecipeAsync
 import coil.compose.rememberAsyncImagePainter
-import com.example.lab09.ejercicio1.models.RecipeModel
-import com.example.lab09.ejercicio1.remote.RecipeApiService
-import com.example.lab09.ui.theme.*
+import com.example.uami.ejercicio1.models.RecipeModel
+import com.example.uami.ejercicio1.remote.RecipeApiService
+import com.example.uami.ui.theme.*
 import java.util.Locale
 import android.speech.tts.TextToSpeech
 

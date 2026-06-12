@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Lab09"
+rootProject.name = "Uami"
 include(":app")

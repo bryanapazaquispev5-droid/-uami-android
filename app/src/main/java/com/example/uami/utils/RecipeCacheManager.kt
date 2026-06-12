@@ -1,7 +1,7 @@
-package com.example.lab09.utils
+package com.example.uami.utils
 
 import android.content.Context
-import com.example.lab09.ejercicio1.models.RecipeModel
+import com.example.uami.ejercicio1.models.RecipeModel
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File

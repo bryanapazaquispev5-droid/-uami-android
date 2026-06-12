@@ -1,4 +1,4 @@
-package com.example.lab09.utils
+package com.example.uami.utils
 
 import android.content.Context
 import com.google.gson.Gson

@@ -1,6 +1,6 @@
-package com.example.lab09.ejercicio1.remote
+package com.example.uami.ejercicio1.remote
 
-import com.example.lab09.ejercicio1.models.RecipeModel
+import com.example.uami.ejercicio1.models.RecipeModel
 import retrofit2.http.GET
 import retrofit2.http.Path
 
