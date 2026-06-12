@@ -60,11 +60,15 @@ class RecipeModelDeserializer : JsonDeserializer<RecipeModel> {
                        else if (obj.has("cook_time") && !obj.get("cook_time").isJsonNull) obj.get("cook_time").asInt else 30
                        
         val difficulty = if (obj.has("difficulty") && !obj.get("difficulty").isJsonNull) obj.get("difficulty").asString else "Medium"
+        val difficultyEn = if (obj.has("difficultyEn") && !obj.get("difficultyEn").isJsonNull) obj.get("difficultyEn").asString else difficulty
+
         val category = if (obj.has("cuisine") && !obj.get("cuisine").isJsonNull) obj.get("cuisine").asString 
                        else if (obj.has("category") && !obj.get("category").isJsonNull) obj.get("category").asString else "International"
+        val cuisineEn = if (obj.has("cuisineEn") && !obj.get("cuisineEn").isJsonNull) obj.get("cuisineEn").asString else category
         
         val mealType = if (obj.has("mealType") && !obj.get("mealType").isJsonNull) obj.get("mealType").asString
                        else if (obj.has("meal_type") && !obj.get("meal_type").isJsonNull) obj.get("meal_type").asString else "Main Course"
+        val mealTypeEn = if (obj.has("mealTypeEn") && !obj.get("mealTypeEn").isJsonNull) obj.get("mealTypeEn").asString else mealType
         
         // Manejar URL de imagen (reemplazar localhost/IP por la URL del túnel público de forma segura)
         var image = if (obj.has("image") && !obj.get("image").isJsonNull) obj.get("image").asString else null
@@ -90,9 +94,9 @@ class RecipeModelDeserializer : JsonDeserializer<RecipeModel> {
             mealType = mealType,
             image = image,
             rating = 5.0,
-            difficultyEn = difficulty,
-            cuisineEn = category,
-            mealTypeEn = mealType
+            difficultyEn = difficultyEn,
+            cuisineEn = cuisineEn,
+            mealTypeEn = mealTypeEn
         )
     }
 }
