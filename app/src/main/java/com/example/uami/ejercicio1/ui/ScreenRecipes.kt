@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -146,7 +148,9 @@ fun ScreenRecipes(
     var allRecipes by remember { mutableStateOf(preloadedRecipes) }
     var isLoading by remember { mutableStateOf(preloadedRecipes.isEmpty()) }
     var isRefreshing by remember { mutableStateOf(false) }
-    var currentPage by remember { mutableIntStateOf(1) }
+    
+    // Cargar preferencia guardada (por defecto Lista Compacta)
+    var isListView by remember { mutableStateOf(com.example.uami.utils.LanguageManager.isListView()) }
     
     // Estado unificado de filtros
     var filterState by remember { mutableStateOf(FilterState()) }
@@ -161,30 +165,15 @@ fun ScreenRecipes(
 
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) {
+            // Simular refresco para la UI, pero usando datos locales
             kotlinx.coroutines.delay(500)
             isRefreshing = false
         }
     }
 
-    // Resetear página al cambiar cualquier filtro
-    LaunchedEffect(filterState) {
-        currentPage = 1
-    }
-
     // Aplicar lógica centralizada
     val filteredAndSortedRecipes = remember(allRecipes, filterState) {
         FilterLogic.applyFilters(allRecipes, filterState)
-    }
-
-    val totalFiltered = filteredAndSortedRecipes.size
-    val limit = 8
-    val totalPages = if (totalFiltered > 0) (totalFiltered + limit - 1) / limit else 1
-    
-    val recipesToDisplay = remember(filteredAndSortedRecipes, currentPage) {
-        val start = (currentPage - 1) * limit
-        val end = minOf(start + limit, totalFiltered)
-        if (start < totalFiltered) filteredAndSortedRecipes.subList(start, end)
-        else emptyList()
     }
 
     Scaffold(
@@ -200,6 +189,18 @@ fun ScreenRecipes(
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = OnBackground)
                         }
                         Text(if (isEs) "Recetas" else "Recipes", style = MaterialTheme.typography.headlineMedium, color = OnBackground)
+                    }
+
+                    // BOTÓN PARA CAMBIAR VISTA
+                    IconButton(onClick = { 
+                        isListView = !isListView 
+                        com.example.uami.utils.LanguageManager.setListView(isListView) // Guardar preferencia
+                    }) {
+                        Icon(
+                            imageVector = if (isListView) Icons.Rounded.GridView else Icons.Rounded.ViewList,
+                            contentDescription = "Toggle View",
+                            tint = Primary
+                        )
                     }
                 }
 
@@ -264,14 +265,6 @@ fun ScreenRecipes(
                 )
             }
         },
-        bottomBar = {
-            PaginationControls(
-                currentPage = currentPage,
-                totalPages = totalPages,
-                currentLanguage = currentLanguage,
-                onPageChange = { currentPage = it }
-            )
-        },
         containerColor = Background
     ) { padding ->
         PullToRefreshBox(
@@ -283,37 +276,146 @@ fun ScreenRecipes(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Primary)
                 }
-            } else if (recipesToDisplay.isEmpty()) {
+            } else if (filteredAndSortedRecipes.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(if(isEs) "No se encontraron recetas" else "No recipes found", color = TextMuted)
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(recipesToDisplay, key = { it.id ?: 0 }) { recipe ->
-                        RecipeCardPremium(
-                            recipe = recipe,
-                            isFav = favoritos.contains(recipe.id),
-                            onFavToggle = {
-                                if (favoritos.contains(recipe.id)) {
-                                    recipe.id?.let { favoritos.remove(it) }
-                                } else {
-                                    favoritos.add(recipe.id ?: 0)
-                                }
-                            },
-                            currentLanguage = currentLanguage,
-                            onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
-                        )
+                if (isListView) {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(filteredAndSortedRecipes, key = { it.id ?: 0 }) { recipe ->
+                            RecipeRowCompact(
+                                recipe = recipe,
+                                isFav = favoritos.contains(recipe.id),
+                                onFavToggle = {
+                                    if (favoritos.contains(recipe.id)) {
+                                        recipe.id?.let { favoritos.remove(it) }
+                                    } else {
+                                        favoritos.add(recipe.id ?: 0)
+                                    }
+                                },
+                                currentLanguage = currentLanguage,
+                                onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
+                            )
+                        }
+                        item { Spacer(Modifier.height(100.dp)) }
                     }
-                    item(span = { GridItemSpan(2) }) {
-                        Spacer(Modifier.height(80.dp))
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(filteredAndSortedRecipes, key = { it.id ?: 0 }) { recipe ->
+                            RecipeCardPremium(
+                                recipe = recipe,
+                                isFav = favoritos.contains(recipe.id),
+                                onFavToggle = {
+                                    if (favoritos.contains(recipe.id)) {
+                                        recipe.id?.let { favoritos.remove(it) }
+                                    } else {
+                                        favoritos.add(recipe.id ?: 0)
+                                    }
+                                },
+                                currentLanguage = currentLanguage,
+                                onClick = { navController.navigate("recipeDetail/${recipe.id ?: 0}") }
+                            )
+                        }
+                        item(span = { GridItemSpan(2) }) {
+                            Spacer(Modifier.height(100.dp))
+                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecipeRowCompact(recipe: RecipeModel, isFav: Boolean, onFavToggle: () -> Unit, currentLanguage: MutableState<String>, onClick: () -> Unit) {
+    val lang = currentLanguage.value
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .clickable { onClick() },
+        color = Surface,
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box {
+                AsyncImage(
+                    model = recipe.image,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Surface(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(4.dp),
+                    color = Color.Black.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Star, null, tint = Primary, modifier = Modifier.size(10.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text("${recipe.rating}", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    translateText(recipe.mealType, lang).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Secondary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    translateText(recipe.name, lang),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = OnSurface
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        translateText(recipe.cuisine, lang),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.size(3.dp).background(TextMuted, CircleShape))
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Rounded.Timer, null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "${(recipe.prepTimeMinutes ?: 0) + (recipe.cookTimeMinutes ?: 0)} min",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted
+                    )
+                }
+            }
+
+            IconButton(onClick = onFavToggle, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = null,
+                    tint = if (isFav) Color.Red else TextMuted.copy(alpha = 0.5f),
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }
