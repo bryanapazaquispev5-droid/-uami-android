@@ -9,6 +9,15 @@ import java.io.File
 class RecipeCacheManager(context: Context) {
     private val gson = Gson()
     private val cacheFile = File(context.filesDir, "recipes_cache.json")
+    private val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+
+    fun saveApiHash(hash: Int) {
+        prefs.edit().putInt("api_hash", hash).apply()
+    }
+
+    fun getApiHash(): Int {
+        return prefs.getInt("api_hash", 0)
+    }
 
     fun saveRecipes(recipes: List<RecipeModel>) {
         try {
