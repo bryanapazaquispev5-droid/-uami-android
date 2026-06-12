@@ -1,15 +1,12 @@
-package com.example.uami.ejercicio1.ui
+package com.example.uami.recipes.ui
 
 import android.speech.tts.TextToSpeech
-import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -24,8 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.ViewList
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -43,8 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
-import com.example.uami.ejercicio1.models.RecipeModel
-import com.example.uami.ejercicio1.remote.RecipeApiService
+import com.example.uami.recipes.models.RecipeModel
+import com.example.uami.recipes.remote.RecipeApiService
 import com.example.uami.ui.theme.*
 import com.example.uami.utils.*
 import com.example.uami.ui.filters.*
@@ -87,7 +85,7 @@ fun ScreenRecipeMenu(navController: NavHostController, currentLanguage: MutableS
         MenuActionCard(
             title = if (isEs) "VER TODO EL CATÁLOGO" else "VIEW ALL CATALOG",
             subtitle = if (isEs) "Explora nuestras recetas" else "Explore our recipes",
-            icon = Icons.Rounded.MenuBook,
+            icon = Icons.AutoMirrored.Rounded.MenuBook,
             onClick = { navController.navigate("recetas_lista") }
         )
 
@@ -171,7 +169,7 @@ fun MenuActionCard(title: String, subtitle: String, icon: ImageVector, onClick: 
 @Composable
 fun ScreenRecipes(
     navController: NavHostController, 
-    servicio: RecipeApiService, 
+    @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, 
     favoritos: MutableList<Int>, 
     currentLanguage: MutableState<String>,
     preloadedRecipes: List<RecipeModel> = emptyList(),
@@ -186,7 +184,7 @@ fun ScreenRecipes(
     var isRefreshing by remember { mutableStateOf(false) }
     
     // Cargar preferencia guardada (por defecto Lista Compacta)
-    var isListView by remember { mutableStateOf(com.example.uami.utils.LanguageManager.isListView()) }
+    var isListView by remember { mutableStateOf(LanguageManager.isListView()) }
     
     // Estado unificado de filtros
     var filterState by remember(initialSearchQuery, initialCuisine, initialMealType, initialDifficulty) {
@@ -222,7 +220,7 @@ fun ScreenRecipes(
     }
     
     // Rastrear el índice máximo de receta que ha sido animado en pantalla
-    var maxAnimatedIndex by remember(filteredAndSortedRecipes) { mutableStateOf(-1) }
+    var maxAnimatedIndex by remember(filteredAndSortedRecipes) { mutableIntStateOf(-1) }
 
     Scaffold(
         topBar = {
@@ -255,13 +253,13 @@ fun ScreenRecipes(
                         IconButton(
                             onClick = { 
                                 isListView = !isListView 
-                                com.example.uami.utils.LanguageManager.setListView(isListView) // Guardar preferencia
+                                LanguageManager.setListView(isListView) // Guardar preferencia
                             },
                             interactionSource = interactionSource,
                             modifier = modifier
                         ) {
                             Icon(
-                                imageVector = if (isListView) Icons.Rounded.GridView else Icons.Rounded.ViewList,
+                                imageVector = if (isListView) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList,
                                 contentDescription = "Toggle View",
                                 tint = Primary
                             )
@@ -440,16 +438,6 @@ fun ScreenRecipes(
 @Composable
 fun RecipeRowCompact(recipe: RecipeModel, isFav: Boolean, onFavToggle: () -> Unit, currentLanguage: MutableState<String>, onClick: () -> Unit) {
     val lang = currentLanguage.value
-    val favScale by animateFloatAsState(
-        targetValue = if (isFav) 1.35f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMedium),
-        label = "favScale"
-    )
-    val favRotation by animateFloatAsState(
-        targetValue = if (isFav) 360f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "favRotation"
-    )
     BouncyPressEffect { modifier, interactionSource ->
         val isPressed by interactionSource.collectIsPressedAsState()
         val imgScale by animateFloatAsState(
@@ -606,17 +594,6 @@ fun RecipeCardPremium(recipe: RecipeModel, isFav: Boolean, onFavToggle: () -> Un
                 }
 
                 // Top-Right: Favorite Button (Spins & Pulses)
-                val favScale by animateFloatAsState(
-                    targetValue = if (isFav) 1.35f else 1.0f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "favScale"
-                )
-                val favRotation by animateFloatAsState(
-                    targetValue = if (isFav) 360f else 0f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-                    label = "favRotation"
-                )
-
                 HeartBurstButton(
                     isFav = isFav,
                     onFavToggle = onFavToggle,
@@ -707,7 +684,7 @@ fun RecipeCardPremium(recipe: RecipeModel, isFav: Boolean, onFavToggle: () -> Un
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiService, id: Int, favoritos: MutableList<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
+fun ScreenRecipeDetail(navController: NavHostController, @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, id: Int, favoritos: MutableList<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
     val isEs = currentLanguage.value == "es"
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -934,10 +911,10 @@ fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiServ
 @Composable
 fun ScreenCookingMode(
     navController: NavHostController, 
-    servicio: RecipeApiService, 
+    @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, 
     id: Int,
     tts: TextToSpeech?,
-    onSpeechFinished: MutableState<(() -> Unit)?>,
+    @Suppress("UNUSED_PARAMETER") onSpeechFinished: MutableState<(() -> Unit)?>,
     currentLanguage: MutableState<String>,
     preloadedRecipes: List<RecipeModel>
 ) {
@@ -1040,7 +1017,7 @@ fun ScreenCookingMode(
                             modifier = modifier
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.VolumeUp, 
+                                imageVector = Icons.AutoMirrored.Rounded.VolumeUp, 
                                 contentDescription = null,
                                 modifier = Modifier.shakeWobbleAnimation(animDuration = 1300, maxRotation = 16f)
                             )
@@ -1066,7 +1043,7 @@ fun ScreenCookingMode(
 }
 
 @Composable
-fun IntroStep(recipe: RecipeModel, lang: String) {
+fun IntroStep(@Suppress("UNUSED_PARAMETER") recipe: RecipeModel, lang: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
         Surface(modifier = Modifier.size(120.dp), shape = CircleShape, color = Primary.copy(alpha = 0.1f)) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Restaurant, null, tint = Primary, modifier = Modifier.size(48.dp)) }
@@ -1092,7 +1069,7 @@ fun CookingStep(number: Int, text: String, isEs: Boolean) {
 }
 
 @Composable
-fun ScreenFavorites(navController: NavHostController, servicio: RecipeApiService, favoritos: List<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
+fun ScreenFavorites(navController: NavHostController, @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, favoritos: List<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
     val isEs = currentLanguage.value == "es"
     var listaFavoritos by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -1299,6 +1276,7 @@ fun StepRow(index: Int, text: String) {
     }
 }
 
+@Suppress("UNUSED")
 @Composable
 fun PaginationControls(currentPage: Int, totalPages: Int, currentLanguage: MutableState<String>, onPageChange: (Int) -> Unit) {
     val isEs = currentLanguage.value == "es"

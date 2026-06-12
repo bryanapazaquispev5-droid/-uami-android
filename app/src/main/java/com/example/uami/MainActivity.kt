@@ -37,12 +37,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.uami.ejercicio1.remote.RecipeApiService
-import com.example.uami.ejercicio1.models.RecipeModel
+import com.example.uami.recipes.remote.RecipeApiService
+import com.example.uami.recipes.models.RecipeModel
 import com.example.uami.utils.RecipeCacheManager
 import com.example.uami.ui.theme.*
 import com.example.uami.utils.*
-import com.example.uami.ejercicio1.ui.*
+import com.example.uami.recipes.ui.*
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 

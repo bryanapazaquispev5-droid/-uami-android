@@ -2,8 +2,8 @@ package com.example.uami.sync
 
 import android.content.Context
 import android.util.Log
-import com.example.uami.ejercicio1.models.RecipeModel
-import com.example.uami.ejercicio1.remote.RecipeApiService
+import com.example.uami.recipes.models.RecipeModel
+import com.example.uami.recipes.remote.RecipeApiService
 import com.example.uami.isInternetAvailable
 import com.example.uami.utils.RecipeCacheManager
 import com.example.uami.utils.translateRecipesListAsync

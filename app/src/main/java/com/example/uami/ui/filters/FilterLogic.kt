@@ -1,6 +1,6 @@
 package com.example.uami.ui.filters
 
-import com.example.uami.ejercicio1.models.RecipeModel
+import com.example.uami.recipes.models.RecipeModel
 
 object FilterLogic {
     fun applyFilters(
