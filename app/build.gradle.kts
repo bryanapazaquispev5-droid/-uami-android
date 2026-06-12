@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     // implementation(libs.androidx.lifecycle.runtime.ktx) // Commented out because we added a specific version above
     implementation("com.airbnb.android:lottie-compose:6.6.0")
+    implementation("com.google.mediapipe:tasks-genai:0.10.14")
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

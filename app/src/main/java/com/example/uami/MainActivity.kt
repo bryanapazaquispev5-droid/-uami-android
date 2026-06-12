@@ -253,7 +253,7 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     Scaffold(
         bottomBar = { 
             if (currentLanguage.value.isNotEmpty() && cacheManager.hasCache() && !isPreparingData && !isDownloadFailed) {
-                CustomBottomBar(navController) 
+                CustomBottomBar(navController, currentLanguage) 
             }
         },
         containerColor = Background
@@ -285,12 +285,16 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
 }
 
 @Composable
-fun CustomBottomBar(navController: NavHostController) {
+fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableState<String>) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: "inicio"
     
     // Determine selected index
-    val selectedIndex = if (currentRoute.startsWith("recetas") || currentRoute == "recetas_lista" || currentRoute == "recetas_favoritos") 1 else 0
+    val selectedIndex = when {
+        currentRoute == "nutriologo" -> 2
+        currentRoute.startsWith("recetas") || currentRoute == "recetas_lista" || currentRoute == "recetas_favoritos" -> 1
+        else -> 0
+    }
 
     Surface(
         modifier = Modifier
@@ -307,11 +311,11 @@ fun CustomBottomBar(navController: NavHostController) {
                 .fillMaxWidth()
         ) {
             val containerWidth = maxWidth
-            val itemWidth = containerWidth / 2
+            val itemWidth = containerWidth / 3
 
             // Elastic sliding background pill
             val pillOffset by animateDpAsState(
-                targetValue = if (selectedIndex == 0) 0.dp else itemWidth,
+                targetValue = itemWidth * selectedIndex,
                 animationSpec = spring(
                     dampingRatio = 0.62f, // Bouncy feel
                     stiffness = Spring.StiffnessMediumLow
@@ -340,15 +344,21 @@ fun CustomBottomBar(navController: NavHostController) {
             ) {
                 BottomNavItem(
                     icon = Icons.Rounded.Explore,
-                    label = "Explorar",
+                    label = if (currentLanguage.value == "es") "Explorar" else "Explore",
                     selected = selectedIndex == 0,
                     onClick = { navController.navigate("inicio") }
                 )
                 BottomNavItem(
                     icon = Icons.Rounded.RestaurantMenu,
-                    label = "Recetas",
+                    label = if (currentLanguage.value == "es") "Recetas" else "Recipes",
                     selected = selectedIndex == 1,
                     onClick = { navController.navigate("recetas") }
+                )
+                BottomNavItem(
+                    icon = Icons.Rounded.Psychology,
+                    label = if (currentLanguage.value == "es") "Nutriólogo" else "Nutrition",
+                    selected = selectedIndex == 2,
+                    onClick = { navController.navigate("nutriologo") }
                 )
             }
         }
@@ -513,6 +523,16 @@ fun Contenido(
             )) {
                 val id = it.arguments?.getInt("id") ?: 0
                 ScreenCookingMode(navController, servicioRecipes, id, tts, onSpeechFinished, currentLanguage, preloadedRecipes)
+            }
+            composable("nutriologo") {
+                ScreenNutritionist(
+                    currentLanguage = currentLanguage,
+                    allRecipes = preloadedRecipes,
+                    favoriteIds = favoritos,
+                    onNavigateToRecipe = { recipeId ->
+                        navController.navigate("recipeDetail/$recipeId")
+                    }
+                )
             }
         }
     }
