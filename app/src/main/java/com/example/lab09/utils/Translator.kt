@@ -151,10 +151,12 @@ suspend fun translateRecipeAsync(recipe: RecipeModel, targetLanguage: String): R
         name = OnDeviceTranslator.translate(recipe.name),
         cuisine = OnDeviceTranslator.translate(recipe.cuisine),
         difficulty = OnDeviceTranslator.translate(recipe.difficulty),
+        mealType = OnDeviceTranslator.translate(recipe.mealType),
         ingredients = recipe.ingredients?.map { OnDeviceTranslator.translate(it) },
         instructions = recipe.instructions?.map { OnDeviceTranslator.translate(it) },
         difficultyEn = recipe.difficultyEn,
-        cuisineEn = recipe.cuisineEn
+        cuisineEn = recipe.cuisineEn,
+        mealTypeEn = recipe.mealTypeEn
     )
 }
 

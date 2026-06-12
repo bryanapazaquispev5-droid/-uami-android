@@ -15,10 +15,12 @@ data class RecipeModel(
     val cookTimeMinutes: Int?,
     val difficulty: String?,
     val cuisine: String?,
+    val mealType: String?,
     val image: String?,
     val rating: Double?,
     val difficultyEn: String? = null,
-    val cuisineEn: String? = null
+    val cuisineEn: String? = null,
+    val mealTypeEn: String? = null
 )
 
 class RecipeModelDeserializer : JsonDeserializer<RecipeModel> {
@@ -61,6 +63,9 @@ class RecipeModelDeserializer : JsonDeserializer<RecipeModel> {
         val category = if (obj.has("cuisine") && !obj.get("cuisine").isJsonNull) obj.get("cuisine").asString 
                        else if (obj.has("category") && !obj.get("category").isJsonNull) obj.get("category").asString else "International"
         
+        val mealType = if (obj.has("mealType") && !obj.get("mealType").isJsonNull) obj.get("mealType").asString
+                       else if (obj.has("meal_type") && !obj.get("meal_type").isJsonNull) obj.get("meal_type").asString else "Main Course"
+        
         // Manejar URL de imagen (reemplazar localhost/IP por la URL del túnel público de forma segura)
         var image = if (obj.has("image") && !obj.get("image").isJsonNull) obj.get("image").asString else null
         if (image != null) {
@@ -82,10 +87,12 @@ class RecipeModelDeserializer : JsonDeserializer<RecipeModel> {
             cookTimeMinutes = cookTime,
             difficulty = difficulty,
             cuisine = category,
+            mealType = mealType,
             image = image,
             rating = 5.0,
             difficultyEn = difficulty,
-            cuisineEn = category
+            cuisineEn = category,
+            mealTypeEn = mealType
         )
     }
 }

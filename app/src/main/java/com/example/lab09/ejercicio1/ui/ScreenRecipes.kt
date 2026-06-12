@@ -587,12 +587,24 @@ fun RecipeCardPremium(
                 }
             }
             Column(Modifier.padding(16.dp)) {
-                Text(
-                    translateText(recipe.cuisine, lang).uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Primary,
-                    fontWeight = FontWeight.Black
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        translateText(recipe.cuisine, lang).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Primary,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        translateText(recipe.mealType, lang).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Secondary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
                     translateText(recipe.name, lang),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
@@ -689,12 +701,21 @@ fun ScreenRecipeDetail(navController: NavHostController, servicio: RecipeApiServ
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(color = Primary, shape = RoundedCornerShape(12.dp)) {
-                        Text(
-                            recipe?.cuisine ?: "Internacional",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = OnPrimary)
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(color = Primary, shape = RoundedCornerShape(12.dp)) {
+                            Text(
+                                translateText(recipe?.cuisine, currentLanguage.value).uppercase(),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = OnPrimary)
+                            )
+                        }
+                        Surface(color = Secondary, shape = RoundedCornerShape(12.dp)) {
+                            Text(
+                                translateText(recipe?.mealType, currentLanguage.value).uppercase(),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = OnPrimary)
+                            )
+                        }
                     }
 
                     Button(
