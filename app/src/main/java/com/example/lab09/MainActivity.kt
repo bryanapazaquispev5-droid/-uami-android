@@ -2,6 +2,9 @@ package com.example.lab09
 
 import android.util.Log
 import android.os.Bundle
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -52,6 +55,18 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.sp
+
+fun isInternetAvailable(context: Context): Boolean {
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = connectivityManager.activeNetwork ?: return false
+    val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return when {
+        activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
+        activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
+        activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
+        else -> false
+    }
+}
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
@@ -127,6 +142,7 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     var isPreparingData by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
     var downloadStatus by remember { mutableStateOf("") }
+    var startupErrorMessage by remember { mutableStateOf("") }
     
     // Guardar el idioma cuando cambie
     LaunchedEffect(currentLanguage.value) {
@@ -172,15 +188,29 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
             } 
             // Si estamos en fase de preparación (justo después de elegir idioma)
             else if (isPreparingData) {
+                val isEs = currentLanguage.value == "es"
+                
+                // 0. Verificar Conexión a Internet primero
+                if (!isInternetAvailable(context)) {
+                    startupErrorMessage = if (isEs) "No hay conexión a internet. Conéctate y vuelve a intentar." else "No internet connection. Connect and try again."
+                    currentLanguage.value = ""
+                    LanguageManager.setLanguage("") 
+                    isPreparingData = false
+                    return@LaunchedEffect
+                }
+
                 try {
-                    val isEs = currentLanguage.value == "es"
                     Log.d("OFFLINE", "Iniciando descarga completa y traducción...")
                     
                     downloadProgress = 0.1f
-                    downloadStatus = if (isEs) "Obteniendo catálogo..." else "Fetching catalog..."
+                    downloadStatus = if (isEs) "Conectando con la API..." else "Connecting to API..."
                     
-                    // 1. Descargar de la API
+                    // 1. Descargar de la API (Si la API está caída, esto lanzará una excepción)
                     val rawRecipes = servicioRecipes.getRecipes()
+
+                    if (rawRecipes.isEmpty()) {
+                        throw Exception("Empty data from API")
+                    }
 
                     downloadProgress = 0.2f
                     downloadStatus = if (isEs) "Traduciendo recetas..." else "Translating recipes..."
@@ -225,7 +255,9 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                     globalRecipes = processedRecipes
                     
                     // 4. Guardar en Caché
-                    cacheManager.saveRecipes(globalRecipes)
+                    if (globalRecipes.isNotEmpty()) {
+                        cacheManager.saveRecipes(globalRecipes)
+                    }
                     
                     downloadProgress = 1.0f
                     downloadStatus = if (isEs) "¡Listo para cocinar!" else "Ready to cook!"
@@ -233,7 +265,15 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                     kotlinx.coroutines.delay(1000)
                 } catch (e: Exception) {
                     Log.e("OFFLINE", "Error en sync inicial: ${e.message}")
-                    globalRecipes = cacheManager.loadRecipes()
+                    if (!cacheManager.hasCache()) {
+                        // Falló en la primera carga (no hay caché)
+                        startupErrorMessage = if (isEs) "Ups, algo salió mal al descargar las recetas. Inténtalo de nuevo más tarde." else "Oops, something went wrong downloading recipes. Please try again later."
+                        currentLanguage.value = ""
+                        LanguageManager.setLanguage("")
+                    } else {
+                        // Falló pero ya hay caché antiguo (fallback)
+                        globalRecipes = cacheManager.loadRecipes()
+                    }
                 } finally {
                     isPreparingData = false // Fin de la pantalla de carga
                 }
@@ -257,7 +297,8 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     ) { paddingValues ->
         when {
             currentLanguage.value.isEmpty() -> {
-                LanguageSelectionScreen(currentLanguage) {
+                LanguageSelectionScreen(currentLanguage, startupErrorMessage) {
+                    startupErrorMessage = "" // Limpiar el error al reintentar
                     isPreparingData = true
                 }
             }
@@ -400,7 +441,7 @@ fun PreparingDataScreen(lang: String, progress: Float, statusText: String) {
 }
 
 @Composable
-fun LanguageSelectionScreen(currentLanguage: MutableState<String>, onContinue: () -> Unit) {
+fun LanguageSelectionScreen(currentLanguage: MutableState<String>, errorMessage: String = "", onContinue: () -> Unit) {
     var selectedTemp by remember { mutableStateOf("") }
     
     Box(
@@ -433,7 +474,29 @@ fun LanguageSelectionScreen(currentLanguage: MutableState<String>, onContinue: (
                 style = MaterialTheme.typography.bodyLarge,
                 color = TextMuted
             )
-            Spacer(Modifier.height(48.dp))
+            
+            if (errorMessage.isNotEmpty()) {
+                Spacer(Modifier.height(24.dp))
+                Surface(
+                    color = Color.Red.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.ErrorOutline, contentDescription = "Error", tint = Color.Red)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = errorMessage,
+                            color = Color.Red,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            
+            Spacer(Modifier.height(32.dp))
             
             // Opción Inglés
             Surface(

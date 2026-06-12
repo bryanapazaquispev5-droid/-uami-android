@@ -34,7 +34,15 @@ class RecipeCacheManager(context: Context) {
         }
     }
 
-    fun hasCache(): Boolean = cacheFile.exists()
+    fun hasCache(): Boolean {
+        if (!cacheFile.exists()) return false
+        try {
+            val content = cacheFile.readText().trim()
+            return content.isNotEmpty() && content != "[]" && content != "{}"
+        } catch (e: Exception) {
+            return false
+        }
+    }
     
     fun clearCache() {
         if (cacheFile.exists()) {
