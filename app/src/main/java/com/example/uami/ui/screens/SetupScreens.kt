@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.uami.R
 import com.example.uami.ui.theme.*
+import com.example.uami.utils.*
 
 @Composable
 fun PreparingDataScreen(
@@ -113,19 +114,24 @@ fun PreparingDataScreen(
                     border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f)), modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.ErrorOutline, contentDescription = "Error", tint = Color.Red)
+                        Icon(Icons.Rounded.ErrorOutline, contentDescription = "Error", tint = Color.Red, modifier = Modifier.pulseAnimation())
                         Spacer(Modifier.width(12.dp))
                         Text(text = errorMessage, color = Color.Red, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     }
                 }
                 Spacer(Modifier.height(24.dp))
-                Button(
-                    onClick = onRetry, modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Primary)
-                ) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = null, tint = OnPrimary)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (isEs) "REINTENTAR" else "RETRY", color = OnPrimary, fontWeight = FontWeight.Bold)
+                BouncyPressEffect { modifier, interactionSource ->
+                    Button(
+                        onClick = onRetry, 
+                        interactionSource = interactionSource,
+                        modifier = modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp), 
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                    ) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = null, tint = OnPrimary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (isEs) "REINTENTAR" else "RETRY", color = OnPrimary, fontWeight = FontWeight.Bold)
+                    }
                 }
             } else {
                 Text(text = "${(progress * 100).toInt()}%", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = Primary)
@@ -158,7 +164,9 @@ fun LanguageSelectionScreen(currentLanguage: MutableState<String>, errorMessage:
             Icon(
                 Icons.Rounded.Language,
                 contentDescription = null,
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier
+                    .size(80.dp)
+                    .pulseAnimation(durationMillis = 2000, scaleRange = 0.12f),
                 tint = Primary
             )
             Spacer(Modifier.height(24.dp))
@@ -184,7 +192,7 @@ fun LanguageSelectionScreen(currentLanguage: MutableState<String>, errorMessage:
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.ErrorOutline, contentDescription = "Error", tint = Color.Red)
+                        Icon(Icons.Rounded.ErrorOutline, contentDescription = "Error", tint = Color.Red, modifier = Modifier.pulseAnimation())
                         Spacer(Modifier.width(12.dp))
                         Text(
                             text = errorMessage,
@@ -199,73 +207,88 @@ fun LanguageSelectionScreen(currentLanguage: MutableState<String>, errorMessage:
             Spacer(Modifier.height(32.dp))
             
             // Opción Inglés
-            Surface(
-                onClick = { selectedTemp = "en" },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = if (selectedTemp == "en") Primary.copy(alpha = 0.1f) else Surface,
-                border = if (selectedTemp == "en") BorderStroke(2.dp, Primary) else null
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            BouncyPressEffect { modifier, interactionSource ->
+                Surface(
+                    onClick = { selectedTemp = "en" },
+                    interactionSource = interactionSource,
+                    modifier = modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (selectedTemp == "en") Primary.copy(alpha = 0.1f) else Surface,
+                    border = if (selectedTemp == "en") BorderStroke(2.dp, Primary) else null
                 ) {
-                    RadioButton(
-                        selected = (selectedTemp == "en"),
-                        onClick = { selectedTemp = "en" },
-                        colors = RadioButtonDefaults.colors(selectedColor = Primary)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("English", color = OnBackground, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (selectedTemp == "en"),
+                            onClick = { selectedTemp = "en" },
+                            colors = RadioButtonDefaults.colors(selectedColor = Primary)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("English", color = OnBackground, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
             
             Spacer(Modifier.height(16.dp))
             
             // Opción Español
-            Surface(
-                onClick = { selectedTemp = "es" },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = if (selectedTemp == "es") Primary.copy(alpha = 0.1f) else Surface,
-                border = if (selectedTemp == "es") BorderStroke(2.dp, Primary) else null
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            BouncyPressEffect { modifier, interactionSource ->
+                Surface(
+                    onClick = { selectedTemp = "es" },
+                    interactionSource = interactionSource,
+                    modifier = modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (selectedTemp == "es") Primary.copy(alpha = 0.1f) else Surface,
+                    border = if (selectedTemp == "es") BorderStroke(2.dp, Primary) else null
                 ) {
-                    RadioButton(
-                        selected = (selectedTemp == "es"),
-                        onClick = { selectedTemp = "es" },
-                        colors = RadioButtonDefaults.colors(selectedColor = Primary)
-                    )
-                    Spacer(Modifier.width(8.dp))
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (selectedTemp == "es"),
+                            onClick = { selectedTemp = "es" },
+                            colors = RadioButtonDefaults.colors(selectedColor = Primary)
+                        )
+                        Spacer(Modifier.width(8.dp))
                     Text("Español", color = OnBackground, fontWeight = FontWeight.Bold)
                 }
             }
+        }
 
             Spacer(Modifier.height(48.dp))
 
-            Button(
-                onClick = { 
-                    if (selectedTemp.isNotEmpty()) {
-                        currentLanguage.value = selectedTemp
-                        onContinue()
-                    }
-                },
-                enabled = selectedTemp.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Primary,
-                    disabledContainerColor = Surface
-                )
-            ) {
-                Text(
-                    if (selectedTemp == "es") "CONTINUAR" else "CONTINUE", 
-                    color = if (selectedTemp.isNotEmpty()) OnPrimary else TextMuted,
-                    fontWeight = FontWeight.Bold
-                )
+            BouncyPressEffect { modifier, interactionSource ->
+                Button(
+                    onClick = { 
+                        if (selectedTemp.isNotEmpty()) {
+                            currentLanguage.value = selectedTemp
+                            onContinue()
+                        }
+                    },
+                    enabled = selectedTemp.isNotEmpty(),
+                    interactionSource = interactionSource,
+                    modifier = modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .then(
+                            if (selectedTemp.isNotEmpty()) Modifier.shimmerGlow(durationMillis = 2000)
+                            else Modifier
+                        ),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Primary,
+                        disabledContainerColor = Surface
+                    )
+                ) {
+                    Text(
+                        if (selectedTemp == "es") "CONTINUAR" else "CONTINUE", 
+                        color = if (selectedTemp.isNotEmpty()) OnPrimary else TextMuted,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

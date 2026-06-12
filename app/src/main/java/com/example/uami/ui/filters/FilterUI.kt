@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.uami.ui.theme.*
-import com.example.uami.utils.translateText
+import com.example.uami.utils.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -77,10 +77,16 @@ fun FilterBottomSheet(
                         color = OnBackground,
                         fontWeight = FontWeight.Bold
                     )
-                    TextButton(onClick = {
-                        onFilterChange(FilterState(searchQuery = filterState.searchQuery))
-                    }) {
-                        Text(if (isEs) "Limpiar" else "Clear", color = Primary)
+                    BouncyPressEffect { modifier, interactionSource ->
+                        TextButton(
+                            onClick = {
+                                onFilterChange(FilterState(searchQuery = filterState.searchQuery))
+                            },
+                            interactionSource = interactionSource,
+                            modifier = modifier
+                        ) {
+                            Text(if (isEs) "Limpiar" else "Clear", color = Primary)
+                        }
                     }
                 }
 
@@ -183,13 +189,19 @@ fun FilterBottomSheet(
 
             Spacer(Modifier.height(16.dp))
 
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
-            ) {
-                Text(if (isEs) "APLICAR" else "APPLY", fontWeight = FontWeight.Bold)
+            BouncyPressEffect { modifier, interactionSource ->
+                Button(
+                    onClick = onDismiss,
+                    interactionSource = interactionSource,
+                    modifier = modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .shimmerGlow(durationMillis = 2000),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                ) {
+                    Text(if (isEs) "APLICAR" else "APPLY", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -212,28 +224,31 @@ fun FilterOptionChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) Primary.copy(alpha = 0.2f) else Surface,
-        border = if (selected) BorderStroke(1.dp, Primary) else null
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+    BouncyPressEffect { bouncyModifier, interactionSource ->
+        Surface(
+            onClick = onClick,
+            interactionSource = interactionSource,
+            modifier = modifier.then(bouncyModifier),
+            shape = RoundedCornerShape(12.dp),
+            color = if (selected) Primary.copy(alpha = 0.2f) else Surface,
+            border = if (selected) BorderStroke(1.dp, Primary) else null
         ) {
-            if (selected) {
-                Icon(Icons.Rounded.Check, null, modifier = Modifier.size(16.dp), tint = Primary)
-                Spacer(Modifier.width(8.dp))
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (selected) {
+                    Icon(Icons.Rounded.Check, null, modifier = Modifier.size(16.dp).pulseAnimation(durationMillis = 1200, scaleRange = 0.15f), tint = Primary)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (selected) Primary else TextMuted,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                )
             }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (selected) Primary else TextMuted,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-            )
         }
     }
 }

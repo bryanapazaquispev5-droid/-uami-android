@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Color
 
 // Premium Color Palette
 val Primary = Color(0xFFF59E0B) // Amber 500
-val Secondary = Color(0xFF10B981) // Emerald 500
+val Secondary = Color(0xFFF43F5E) // Vibrant Coral Rose 500 (Warm gourmet tone)
 val Background = Color(0xFF0F172A) // Slate 900
 val Surface = Color(0xFF1E293B) // Slate 800
 val OnPrimary = Color.Black
