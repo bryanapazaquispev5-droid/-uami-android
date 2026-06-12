@@ -1,11 +1,8 @@
 package com.example.uami.ui.screens
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ErrorOutline
@@ -18,8 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -27,6 +22,10 @@ import androidx.compose.ui.unit.sp
 import com.example.uami.R
 import com.example.uami.ui.theme.*
 import com.example.uami.utils.*
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.rememberLottieComposition
 
 @Composable
 fun PreparingDataScreen(
@@ -38,27 +37,7 @@ fun PreparingDataScreen(
     onRetry: () -> Unit = {}
 ) {
     val isEs = lang == "es"
-    val infiniteTransition = rememberInfiniteTransition(label = "loading")
-
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-
-    val offsetY by infiniteTransition.animateFloat(
-        initialValue = -5f,
-        targetValue = 5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "offset"
-    )
+    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.chef_loading))
 
     Box(
         modifier = Modifier
@@ -71,38 +50,15 @@ fun PreparingDataScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(24.dp)
         ) {
-            Box(contentAlignment = Alignment.TopCenter) {
-                if (!isFailed) {
-                    repeat(3) { i ->
-                        val steamAlpha by infiniteTransition.animateFloat(
-                            initialValue = 0.6f, targetValue = 0f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(1500, delayMillis = i * 500, easing = LinearEasing),
-                                repeatMode = RepeatMode.Restart
-                            ), label = "steamAlpha$i"
-                        )
-                        val steamOffset by infiniteTransition.animateFloat(
-                            initialValue = 0f, targetValue = -100f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(1500, delayMillis = i * 500, easing = LinearEasing),
-                                repeatMode = RepeatMode.Restart
-                            ), label = "steamOffset$i"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .offset(y = steamOffset.dp, x = (i * 20 - 20).dp)
-                                .size(12.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = steamAlpha))
-                        )
-                    }
-                }
-                Image(
-                    painter = painterResource(id = R.drawable.ic_chef_loading),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(160.dp)
-                        .graphicsLayer(scaleX = scale, scaleY = scale, translationY = offsetY)
+            Box(
+                modifier = Modifier.size(200.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                LottieAnimation(
+                    composition = composition,
+                    iterations = LottieConstants.IterateForever,
+                    isPlaying = !isFailed,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
             
