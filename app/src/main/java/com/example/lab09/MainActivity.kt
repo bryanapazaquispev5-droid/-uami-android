@@ -140,6 +140,7 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     // Estado global para las recetas pre-cargadas
     var globalRecipes by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isPreparingData by remember { mutableStateOf(false) }
+    var isDownloadFailed by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
     var downloadStatus by remember { mutableStateOf("") }
     var startupErrorMessage by remember { mutableStateOf("") }
@@ -179,38 +180,35 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     val servicioRecipes = retrofitRecipes.create(RecipeApiService::class.java)
 
     // Lógica de Pre-carga, Traducción y Caché
-    LaunchedEffect(currentLanguage.value, isPreparingData) {
+    LaunchedEffect(currentLanguage.value, isPreparingData, isDownloadFailed) {
         if (currentLanguage.value.isNotEmpty()) {
-            // Si hay caché y NO estamos en fase de preparación, cargar directo
-            if (cacheManager.hasCache() && !isPreparingData) {
+            val isEs = currentLanguage.value == "es"
+            
+            // Si hay caché válido, no estamos descargando ni hay fallo, cargamos directo y entramos a la app
+            if (cacheManager.hasCache() && !isPreparingData && !isDownloadFailed) {
                 globalRecipes = cacheManager.loadRecipes()
                 Log.d("OFFLINE", "Cargado desde caché existente")
             } 
-            // Si estamos en fase de preparación (justo después de elegir idioma)
+            // Modo Descarga Activa
             else if (isPreparingData) {
-                val isEs = currentLanguage.value == "es"
+                isDownloadFailed = false
                 
-                // 0. Verificar Conexión a Internet primero
+                // 0. Verificar Conexión a Internet
                 if (!isInternetAvailable(context)) {
-                    startupErrorMessage = if (isEs) "No hay conexión a internet. Conéctate y vuelve a intentar." else "No internet connection. Connect and try again."
-                    currentLanguage.value = ""
-                    LanguageManager.setLanguage("") 
+                    startupErrorMessage = if (isEs) "No hay conexión a internet. Verifica tu red." else "No internet connection. Check your network."
+                    isDownloadFailed = true
                     isPreparingData = false
                     return@LaunchedEffect
                 }
 
                 try {
                     Log.d("OFFLINE", "Iniciando descarga completa y traducción...")
-                    
                     downloadProgress = 0.1f
                     downloadStatus = if (isEs) "Conectando con la API..." else "Connecting to API..."
                     
-                    // 1. Descargar de la API (Si la API está caída, esto lanzará una excepción)
+                    // 1. Descargar de la API
                     val rawRecipes = servicioRecipes.getRecipes()
-
-                    if (rawRecipes.isEmpty()) {
-                        throw Exception("Empty data from API")
-                    }
+                    if (rawRecipes.isEmpty()) throw Exception("API_EMPTY")
 
                     downloadProgress = 0.2f
                     downloadStatus = if (isEs) "Traduciendo recetas..." else "Translating recipes..."
@@ -225,26 +223,35 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                     // 3. Descargar imágenes para que funcionen 100% offline
                     val total = processedRecipes.size
                     processedRecipes = processedRecipes.mapIndexed { index, recipe ->
+                        // VERIFICACIÓN CONTINUA
+                        if (!isInternetAvailable(context)) throw Exception("INTERNET_LOST")
+
                         downloadProgress = 0.2f + (0.7f * index / total)
                         downloadStatus = if (isEs) "Descargando imágenes... ($index/$total)" else "Downloading images... ($index/$total)"
                         
                         var newImage = recipe.image
                         if (recipe.image != null && recipe.image.startsWith("http")) {
-                            try {
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    val request = okhttp3.Request.Builder().url(recipe.image).build()
-                                    val response = okHttpClient.newCall(request).execute()
-                                    if (response.isSuccessful) {
-                                        val bytes = response.body?.bytes()
-                                        if (bytes != null) {
-                                            val fileName = "img_${recipe.id}.jpg"
-                                            val file = java.io.File(context.filesDir, fileName)
-                                            file.writeBytes(bytes)
-                                            newImage = "file://${file.absolutePath}"
+                            val fileName = "img_${recipe.id}.jpg"
+                            val file = java.io.File(context.filesDir, fileName)
+
+                            // REANUDAR: Si ya existe, saltar
+                            if (file.exists() && file.length() > 0) {
+                                newImage = "file://${file.absolutePath}"
+                            } else {
+                                try {
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        val request = okhttp3.Request.Builder().url(recipe.image).build()
+                                        val response = okHttpClient.newCall(request).execute()
+                                        if (response.isSuccessful) {
+                                            val bytes = response.body?.bytes()
+                                            if (bytes != null) {
+                                                file.writeBytes(bytes)
+                                                newImage = "file://${file.absolutePath}"
+                                            }
                                         }
                                     }
-                                }
-                            } catch (e: Exception) { e.printStackTrace() }
+                                } catch (e: Exception) { throw Exception("INTERNET_LOST") }
+                            }
                         }
                         recipe.copy(image = newImage)
                     }
@@ -254,7 +261,7 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                     
                     globalRecipes = processedRecipes
                     
-                    // 4. Guardar en Caché
+                    // 4. Guardar en Caché solo al terminar todo al 100%
                     if (globalRecipes.isNotEmpty()) {
                         cacheManager.saveRecipes(globalRecipes)
                     }
@@ -263,19 +270,20 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                     downloadStatus = if (isEs) "¡Listo para cocinar!" else "Ready to cook!"
                     
                     kotlinx.coroutines.delay(1000)
+                    isPreparingData = false // Fin de la pantalla de carga (Exitoso)
+                    
                 } catch (e: Exception) {
-                    Log.e("OFFLINE", "Error en sync inicial: ${e.message}")
+                    Log.e("OFFLINE", "Error en sync: ${e.message}")
                     if (!cacheManager.hasCache()) {
-                        // Falló en la primera carga (no hay caché)
-                        startupErrorMessage = if (isEs) "Ups, algo salió mal al descargar las recetas. Inténtalo de nuevo más tarde." else "Oops, something went wrong downloading recipes. Please try again later."
-                        currentLanguage.value = ""
-                        LanguageManager.setLanguage("")
+                        // Fallo catastrófico y no hay backup. Se queda en la pantalla de carga bloqueado.
+                        startupErrorMessage = if (isEs) "Ups, algo salió mal al descargar los datos. Por favor, reinténtalo." else "Oops, something went wrong downloading data. Please try again."
+                        isDownloadFailed = true
+                        isPreparingData = false
                     } else {
-                        // Falló pero ya hay caché antiguo (fallback)
+                        // Falló la actualización, pero ya hay un caché viejo que sirve
                         globalRecipes = cacheManager.loadRecipes()
+                        isPreparingData = false
                     }
-                } finally {
-                    isPreparingData = false // Fin de la pantalla de carga
                 }
             }
         }
@@ -288,8 +296,8 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
 
     Scaffold(
         bottomBar = { 
-            // Ocultar barra de navegación si no se ha elegido idioma o si se está cargando
-            if (currentLanguage.value.isNotEmpty() && !isPreparingData) {
+            // Ocultar barra de navegación si no hay caché completo (obligando a pasar por el loading screen)
+            if (currentLanguage.value.isNotEmpty() && cacheManager.hasCache() && !isPreparingData && !isDownloadFailed) {
                 CustomBottomBar(navController) 
             }
         },
@@ -297,13 +305,26 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     ) { paddingValues ->
         when {
             currentLanguage.value.isEmpty() -> {
-                LanguageSelectionScreen(currentLanguage, startupErrorMessage) {
-                    startupErrorMessage = "" // Limpiar el error al reintentar
+                LanguageSelectionScreen(currentLanguage) {
                     isPreparingData = true
                 }
             }
-            isPreparingData -> {
-                PreparingDataScreen(currentLanguage.value, downloadProgress, downloadStatus)
+            !cacheManager.hasCache() || isPreparingData || isDownloadFailed -> {
+                // BLOQUEO OBLIGATORIO: Si no hay caché, nunca entra a la App.
+                
+                // Si entra aquí sin estar descargando ni fallando (ej. reabrió la app), forzamos la descarga automática
+                LaunchedEffect(Unit) {
+                    if (!cacheManager.hasCache() && !isPreparingData && !isDownloadFailed) {
+                        isPreparingData = true
+                    }
+                }
+                
+                PreparingDataScreen(currentLanguage.value, downloadProgress, downloadStatus, isDownloadFailed, startupErrorMessage) {
+                    // Botón Reintentar
+                    isDownloadFailed = false
+                    startupErrorMessage = ""
+                    isPreparingData = true
+                }
             }
             else -> {
                 Contenido(paddingValues, navController, servicioRecipes, favoritos, tts, onSpeechFinished, currentLanguage, globalRecipes)
@@ -313,11 +334,10 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
 }
 
 @Composable
-fun PreparingDataScreen(lang: String, progress: Float, statusText: String) {
+fun PreparingDataScreen(lang: String, progress: Float, statusText: String, isFailed: Boolean = false, errorMessage: String = "", onRetry: () -> Unit = {}) {
     val isEs = lang == "es"
     val infiniteTransition = rememberInfiniteTransition(label = "loading")
 
-    // Animación de escala para el chef
     val scale by infiniteTransition.animateFloat(
         initialValue = 0.95f,
         targetValue = 1.05f,
@@ -328,7 +348,6 @@ fun PreparingDataScreen(lang: String, progress: Float, statusText: String) {
         label = "scale"
     )
 
-    // Animación de flotación suave
     val offsetY by infiniteTransition.animateFloat(
         initialValue = -5f,
         targetValue = 5f,
@@ -342,11 +361,7 @@ fun PreparingDataScreen(lang: String, progress: Float, statusText: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Background, Surface)
-                )
-            ),
+            .background(Brush.verticalGradient(colors = listOf(Background, Surface))),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -354,88 +369,64 @@ fun PreparingDataScreen(lang: String, progress: Float, statusText: String) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(24.dp)
         ) {
-            // Contenedor del Chef con Efecto de "Vapor"
             Box(contentAlignment = Alignment.TopCenter) {
-                // Simulación de Vapor (3 círculos animados)
-                repeat(3) { i ->
-                    val steamAlpha by infiniteTransition.animateFloat(
-                        initialValue = 0.6f,
-                        targetValue = 0f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1500, delayMillis = i * 500, easing = LinearEasing),
-                            repeatMode = RepeatMode.Restart
-                        ),
-                        label = "steamAlpha$i"
-                    )
-                    val steamOffset by infiniteTransition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = -100f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1500, delayMillis = i * 500, easing = LinearEasing),
-                            repeatMode = RepeatMode.Restart
-                        ),
-                        label = "steamOffset$i"
-                    )
-                    
-                    Box(
-                        modifier = Modifier
-                            .offset(y = steamOffset.dp, x = (i * 20 - 20).dp)
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = steamAlpha))
-                    )
+                if (!isFailed) {
+                    repeat(3) { i ->
+                        val steamAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.6f, targetValue = 0f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1500, delayMillis = i * 500, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart
+                            ), label = "steamAlpha$i"
+                        )
+                        val steamOffset by infiniteTransition.animateFloat(
+                            initialValue = 0f, targetValue = -100f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1500, delayMillis = i * 500, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart
+                            ), label = "steamOffset$i"
+                        )
+                        Box(modifier = Modifier.offset(y = steamOffset.dp, x = (i * 20 - 20).dp).size(12.dp).clip(CircleShape).background(Color.White.copy(alpha = steamAlpha)))
+                    }
                 }
-
                 Image(
                     painter = painterResource(id = R.drawable.ic_chef_loading),
                     contentDescription = null,
-                    modifier = Modifier
-                        .size(160.dp)
-                        .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                            translationY = offsetY
-                        )
+                    modifier = Modifier.size(160.dp).graphicsLayer(scaleX = scale, scaleY = scale, translationY = offsetY)
                 )
             }
             
             Spacer(Modifier.height(40.dp))
             
-            // Barra de progreso y porcentaje
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = Primary
-            )
-            Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = { progress },
-                color = Primary,
-                trackColor = Surface,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(10.dp))
-            )
-            
-            Spacer(Modifier.height(24.dp))
-            
-            // Texto de estado dinámico
-            Text(
-                text = statusText.ifEmpty { if (isEs) "Conectando..." else "Connecting..." },
-                style = MaterialTheme.typography.titleMedium,
-                color = OnBackground,
-                textAlign = TextAlign.Center
-            )
-            
-            Spacer(Modifier.height(12.dp))
-            
-            Text(
-                if(isEs) "Configurando tu cocina offline" else "Setting up your offline kitchen",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted,
-                fontWeight = FontWeight.Medium
-            )
+            if (isFailed) {
+                Surface(
+                    color = Color.Red.copy(alpha = 0.1f), shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f)), modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.ErrorOutline, contentDescription = "Error", tint = Color.Red)
+                        Spacer(Modifier.width(12.dp))
+                        Text(text = errorMessage, color = Color.Red, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = onRetry, modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                ) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, tint = OnPrimary)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isEs) "REINTENTAR DESCARGA" else "RETRY DOWNLOAD", color = OnPrimary, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Text(text = "${(progress * 100).toInt()}%", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = Primary)
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(progress = { progress }, color = Primary, trackColor = Surface, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(10.dp)))
+                Spacer(Modifier.height(24.dp))
+                Text(text = statusText.ifEmpty { if (isEs) "Conectando..." else "Connecting..." }, style = MaterialTheme.typography.titleMedium, color = OnBackground, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(12.dp))
+                Text(if (isEs) "Configurando tu cocina offline" else "Setting up your offline kitchen", style = MaterialTheme.typography.bodyMedium, color = TextMuted, fontWeight = FontWeight.Medium)
+            }
         }
     }
 }
