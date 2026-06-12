@@ -590,6 +590,7 @@ fun ScreenInicio(
     val context = LocalContext.current
     val nutritionistManager = remember { NutritionistAIManager(context) }
     val isModelReady by nutritionistManager.isModelReady.collectAsState()
+    var hasGeneratedAI by remember { mutableStateOf(false) }
 
     var recetasDestacadas by remember(preloadedRecipes) {
         mutableStateOf(
@@ -606,7 +607,8 @@ fun ScreenInicio(
     }
 
     LaunchedEffect(preloadedRecipes, favoritos, isModelReady) {
-        if (preloadedRecipes.isNotEmpty() && isModelReady) {
+        if (preloadedRecipes.isNotEmpty() && isModelReady && !hasGeneratedAI) {
+            hasGeneratedAI = true
             nutritionistManager.initializeLLM()
             recetasDestacadas = nutritionistManager.generateAIRecommendations(preloadedRecipes, favoritos, isEs)
         }
