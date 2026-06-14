@@ -53,6 +53,8 @@ import kotlinx.coroutines.delay
 import androidx.lifecycle.ViewModelProvider
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import com.example.uami.recipes.data.RecipeRepository
 import com.example.uami.recipes.viewmodel.RecipesViewModel
 import com.example.uami.recipes.viewmodel.ViewModelFactory
@@ -66,6 +68,15 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.ui.graphics.graphicsLayer
 
 @Composable
@@ -884,6 +895,7 @@ fun ScreenRecipeDetail(navController: NavHostController, @Suppress("UNUSED_PARAM
                             modifier = modifier
                                 .fillMaxWidth()
                                 .height(56.dp)
+                                .clip(RoundedCornerShape(20.dp))
                                 .shimmerGlow(durationMillis = 2000)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1131,7 +1143,67 @@ fun ScreenCookingMode(
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(Background).statusBarsPadding()) {
+        var isSpeaking by remember { mutableStateOf(false) }
+
+        LaunchedEffect(tts) {
+            tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        isSpeaking = true
+                    }
+                }
+                override fun onDone(utteranceId: String?) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        isSpeaking = false
+                    }
+                }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        isSpeaking = false
+                    }
+                }
+            })
+        }
+
+        // Stop speaking when leaving this screen
+        DisposableEffect(Unit) {
+            onDispose {
+                tts?.stop()
+                isSpeaking = false
+            }
+        }
+
+        // Speak automatically when the page changes
+        LaunchedEffect(pagerState.currentPage) {
+            delay(500)
+            val textToRead = if (pagerState.currentPage == 0) {
+                if (isEs) "Vamos a preparar ${translateText(currentRecipe.name, "es")}. ¿Lista para empezar?"
+                else "Let's prepare ${currentRecipe.name}. Ready to start?"
+            } else {
+                steps.getOrNull(pagerState.currentPage - 1) ?: ""
+            }
+            if (textToRead.isNotEmpty()) {
+                tts?.speak(textToRead, TextToSpeech.QUEUE_FLUSH, null, "step_${pagerState.currentPage}")
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background)
+                .drawWithContent {
+                    drawContent()
+                    drawCircle(
+                        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                            colors = listOf(Primary.copy(alpha = 0.08f), Color.Transparent),
+                            radius = this.size.minDimension * 0.8f
+                        ),
+                        center = Offset(this.size.width / 2f, this.size.height / 3f)
+                    )
+                }
+                .statusBarsPadding()
+        ) {
             Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 BouncyPressEffect(squishFactor = 0.72f) { modifier, interactionSource ->
                     IconButton(
@@ -1167,10 +1239,12 @@ fun ScreenCookingMode(
                 contentPadding = PaddingValues(32.dp),
                 pageSpacing = 16.dp
             ) { page ->
+                val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                val zIndex = if (pageOffset in 0f..1f) 2f - pageOffset else if (pageOffset in -1f..0f) 1f + pageOffset else -10f
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .zIndex(-page.toFloat())
+                        .zIndex(zIndex)
                         .pageCurlTransition(page, pagerState)
                 ) {
                     if (page == 0) {
@@ -1187,60 +1261,135 @@ fun ScreenCookingMode(
             }
             
             // Voice Control Bar
-            Surface(modifier = Modifier.fillMaxWidth(), color = Surface, tonalElevation = 8.dp, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) {
-                Row(modifier = Modifier.padding(24.dp).navigationBarsPadding(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    BouncyPressEffect { modifier, interactionSource ->
-                        IconButton(
-                            onClick = { 
-                                coroutineScope.launch { if(pagerState.currentPage > 0) pagerState.animateScrollToPage(pagerState.currentPage - 1) } 
-                            }, 
-                            enabled = pagerState.currentPage > 0,
-                            interactionSource = interactionSource,
-                            modifier = modifier
-                        ) {
-                            Icon(Icons.Rounded.ChevronLeft, null, tint = if(pagerState.currentPage > 0) Primary else TextMuted, modifier = Modifier.size(32.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Surface,
+                tonalElevation = 8.dp,
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(top = 16.dp, bottom = 24.dp)
+                        .navigationBarsPadding(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    AnimatedVisibility(
+                        visible = isSpeaking,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            AudioWaveVisualizer(isSpeaking = isSpeaking)
+                            Spacer(Modifier.height(12.dp))
                         }
                     }
 
-                    BouncyPressEffect(squishFactor = 0.68f) { modifier, interactionSource ->
-                        FloatingActionButton(
-                            onClick = { 
-                                val textToRead = if(pagerState.currentPage == 0) {
-                                    if(isEs) "Vamos a preparar ${translateText(currentRecipe.name, "es")}. ¿Lista para empezar?" 
-                                    else "Let's prepare ${currentRecipe.name}. Ready to start?"
-                                } else {
-                                    steps[pagerState.currentPage - 1]
-                                }
-                                tts?.speak(textToRead, TextToSpeech.QUEUE_FLUSH, null, "step_${pagerState.currentPage}")
-                            },
-                            containerColor = Primary,
-                            contentColor = OnPrimary,
-                            shape = CircleShape,
-                            interactionSource = interactionSource,
-                            modifier = modifier
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.VolumeUp, 
-                                contentDescription = null,
-                                modifier = Modifier.shakeWobbleAnimation(animDuration = 1300, maxRotation = 16f)
-                            )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        BouncyPressEffect { modifier, interactionSource ->
+                            IconButton(
+                                onClick = { 
+                                    coroutineScope.launch { if(pagerState.currentPage > 0) pagerState.animateScrollToPage(pagerState.currentPage - 1) } 
+                                }, 
+                                enabled = pagerState.currentPage > 0,
+                                interactionSource = interactionSource,
+                                modifier = modifier
+                            ) {
+                                Icon(Icons.Rounded.ChevronLeft, null, tint = if(pagerState.currentPage > 0) Primary else TextMuted, modifier = Modifier.size(32.dp))
+                            }
                         }
-                    }
 
-                    BouncyPressEffect { modifier, interactionSource ->
-                        IconButton(
-                            onClick = { 
-                                coroutineScope.launch { if(pagerState.currentPage < steps.size) pagerState.animateScrollToPage(pagerState.currentPage + 1) } 
-                            }, 
-                            enabled = pagerState.currentPage < steps.size,
-                            interactionSource = interactionSource,
-                            modifier = modifier
-                        ) {
-                            Icon(Icons.Rounded.ChevronRight, null, tint = if(pagerState.currentPage < steps.size) Primary else TextMuted, modifier = Modifier.size(32.dp))
+                        BouncyPressEffect(squishFactor = 0.68f) { modifier, interactionSource ->
+                            FloatingActionButton(
+                                onClick = { 
+                                    val textToRead = if(pagerState.currentPage == 0) {
+                                        if(isEs) "Vamos a preparar ${translateText(currentRecipe.name, "es")}. ¿Lista para empezar?" 
+                                        else "Let's prepare ${currentRecipe.name}. Ready to start?"
+                                    } else {
+                                        steps[pagerState.currentPage - 1]
+                                    }
+                                    tts?.speak(textToRead, TextToSpeech.QUEUE_FLUSH, null, "step_${pagerState.currentPage}")
+                                },
+                                containerColor = Primary,
+                                contentColor = OnPrimary,
+                                shape = CircleShape,
+                                interactionSource = interactionSource,
+                                modifier = modifier
+                                    .clip(CircleShape)
+                                    .then(if (isSpeaking) Modifier.pulseAnimation(durationMillis = 1000, scaleRange = 0.1f) else Modifier)
+                                    .then(if (isSpeaking) Modifier.shimmerGlow(durationMillis = 1500) else Modifier)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.VolumeUp, 
+                                    contentDescription = null,
+                                    modifier = Modifier.shakeWobbleAnimation(animDuration = 1300, maxRotation = 16f)
+                                )
+                            }
+                        }
+
+                        BouncyPressEffect { modifier, interactionSource ->
+                            IconButton(
+                                onClick = { 
+                                    coroutineScope.launch { if(pagerState.currentPage < steps.size) pagerState.animateScrollToPage(pagerState.currentPage + 1) } 
+                                }, 
+                                enabled = pagerState.currentPage < steps.size,
+                                interactionSource = interactionSource,
+                                modifier = modifier
+                            ) {
+                                Icon(Icons.Rounded.ChevronRight, null, tint = if(pagerState.currentPage < steps.size) Primary else TextMuted, modifier = Modifier.size(32.dp))
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun AudioWaveVisualizer(
+    isSpeaking: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val durations = listOf(400, 300, 450, 350, 420, 280, 400)
+        durations.forEachIndexed { index, duration ->
+            val heightFraction = if (isSpeaking) {
+                infiniteTransition.animateFloat(
+                    initialValue = 0.15f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = duration, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "bar_$index"
+                ).value
+            } else {
+                0.15f
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(28.dp * heightFraction)
+                    .clip(CircleShape)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(Primary, Primary.copy(alpha = 0.4f))
+                        )
+                    )
+            )
         }
     }
 }
@@ -1286,11 +1435,13 @@ fun IntroStep(
             Spacer(Modifier.height(16.dp))
             Surface(
                 modifier = Modifier
-                    .size(80.dp)
-                    .pulseAnimation(durationMillis = 2000, scaleRange = 0.08f),
+                    .size(85.dp)
+                    .bobbingAnimation(durationMillis = 2000, dy = 6f)
+                    .clip(CircleShape)
+                    .shimmerGlow(durationMillis = 2500),
                 shape = CircleShape,
-                color = Primary.copy(alpha = 0.1f),
-                border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
+                color = Primary.copy(alpha = 0.12f),
+                border = BorderStroke(1.5.dp, Primary.copy(alpha = 0.4f))
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -1325,10 +1476,13 @@ fun IntroStep(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Surface.copy(alpha = 0.4f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    .padding(horizontal = 8.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .shimmerGlow(durationMillis = 3000, glowColor = Primary.copy(alpha = 0.08f)),
+                shape = RoundedCornerShape(20.dp),
+                color = Surface.copy(alpha = 0.5f),
+                border = BorderStroke(1.5.dp, Primary.copy(alpha = 0.2f)),
+                tonalElevation = 6.dp
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -1470,6 +1624,7 @@ fun IntroStep(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
+                        .clip(RoundedCornerShape(24.dp))
                         .shimmerGlow(durationMillis = 2000)
                         .pulseAnimation(durationMillis = 1500, scaleRange = 0.03f),
                     shape = RoundedCornerShape(24.dp),
@@ -1538,41 +1693,84 @@ fun CookingStep(number: Int, text: String, isEs: Boolean) {
         modifier = Modifier
             .fillMaxSize()
             .padding(8.dp),
-        shape = RoundedCornerShape(24.dp),
-        color = Surface.copy(alpha = 0.5f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+        shape = RoundedCornerShape(28.dp),
+        color = Surface.copy(alpha = 0.4f),
+        border = BorderStroke(1.dp, Primary.copy(alpha = 0.15f)),
         tonalElevation = 4.dp
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(28.dp),
-            verticalArrangement = Arrangement.Center
-        ) {
-            Surface(
-                color = Primary.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(50),
-                border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
-            ) {
-                Text(
-                    text = if (isEs) "PASO $number" else "STEP $number",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Primary,
-                    fontWeight = FontWeight.Black,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                )
-            }
-            
-            Spacer(Modifier.height(32.dp))
-            
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Giant quotation mark watermark in background
             Text(
-                text = text,
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    lineHeight = 38.sp,
-                    fontWeight = FontWeight.SemiBold
+                text = "“",
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontSize = 180.sp,
+                    fontWeight = FontWeight.Black
                 ),
-                color = OnBackground
+                color = Primary.copy(alpha = 0.04f),
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 20.dp)
             )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(28.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = Primary.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = if (isEs) "PASO $number" else "STEP $number",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Primary,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Rounded.MenuBook,
+                        contentDescription = null,
+                        tint = TextMuted.copy(alpha = 0.3f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        lineHeight = 38.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = OnBackground,
+                    modifier = Modifier.padding(vertical = 24.dp)
+                )
+
+                // Bottom bar decorative accent line
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(3.dp)
+                            .clip(CircleShape)
+                            .background(
+                                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                    colors = listOf(Primary, Color.Transparent)
+                                )
+                            )
+                    )
+                }
+            }
         }
     }
 }

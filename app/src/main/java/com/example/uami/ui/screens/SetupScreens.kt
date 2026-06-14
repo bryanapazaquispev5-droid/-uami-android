@@ -229,6 +229,7 @@ fun LanguageSelectionScreen(currentLanguage: MutableState<String>, errorMessage:
                     modifier = modifier
                         .fillMaxWidth()
                         .height(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
                         .then(
                             if (selectedTemp.isNotEmpty()) Modifier.shimmerGlow(durationMillis = 2000)
                             else Modifier

@@ -343,6 +343,7 @@ fun DietPlanTab(
                     modifier = modifier
                         .fillMaxWidth()
                         .height(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
                         .shimmerGlow(durationMillis = 2000),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Primary)
