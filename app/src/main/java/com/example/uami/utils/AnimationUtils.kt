@@ -22,9 +22,63 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.PagerState
+
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.pageCurlTransition(
+    page: Int,
+    pagerState: PagerState
+): Modifier = graphicsLayer {
+    val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+    
+    if (pageOffset < -1.5f || pageOffset > 1.5f) {
+        alpha = 0f
+    } else {
+        // Cancel default horizontal pager scroll offset
+        val spacingPx = with(this) { 16.dp.toPx() }
+        translationX = -pageOffset * (size.width + spacingPx)
+        
+        if (pageOffset > 0f) {
+            // Page is exiting / peeling down (moving forward)
+            // Pivot around top-left corner to simulate top-left tape/pin
+            transformOrigin = TransformOrigin(0f, 0f)
+            
+            // Swing down clockwise
+            rotationZ = pageOffset * 55f
+            
+            // Translate/peel downwards
+            translationY = pageOffset * size.height * 1.25f
+            
+            // Fade out as it curls away
+            alpha = (1f - pageOffset * 1.5f).coerceIn(0f, 1f)
+            
+            // Scale down slightly
+            val scale = 1f - pageOffset * 0.15f
+            scaleX = scale
+            scaleY = scale
+        } else if (pageOffset < 0f) {
+            // Page is entering from behind
+            val progress = 1f + pageOffset // 0 to 1
+            
+            scaleX = 0.88f + progress * 0.12f
+            scaleY = 0.88f + progress * 0.12f
+            alpha = (0.4f + progress * 0.6f).coerceIn(0f, 1f)
+            translationY = 0f
+            rotationZ = 0f
+        } else {
+            scaleX = 1f
+            scaleY = 1f
+            alpha = 1f
+            translationY = 0f
+            rotationZ = 0f
+        }
+    }
+}
 
 @Composable
 fun BouncyPressEffect(

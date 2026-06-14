@@ -31,6 +31,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -47,6 +49,7 @@ import com.example.uami.ui.theme.*
 import com.example.uami.utils.*
 import com.example.uami.ui.filters.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -939,10 +942,33 @@ fun ScreenCookingMode(
     if (isLoading) {
         Box(Modifier.fillMaxSize().background(Background), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Primary) }
     } else if (recipe != null) {
+        val currentRecipe = recipe!!
         val isEs = currentLanguage.value == "es"
-        val steps = recipe?.instructions ?: emptyList()
+        val steps = currentRecipe.instructions ?: emptyList()
         val pagerState = rememberPagerState(pageCount = { steps.size + 1 })
         val coroutineScope = rememberCoroutineScope()
+
+        // Track ingredients checklist state
+        val checkedIngredients = remember(currentRecipe) {
+            mutableStateMapOf<String, Boolean>().apply {
+                currentRecipe.ingredients?.forEach { this[it] = false }
+            }
+        }
+        
+        var showSuccessMessage by remember { mutableStateOf(false) }
+
+        // Automatically transition when all ingredients are checked
+        LaunchedEffect(checkedIngredients.values.toList(), currentRecipe) {
+            val list = currentRecipe.ingredients ?: emptyList()
+            if (list.isNotEmpty() && list.all { checkedIngredients[it] == true }) {
+                showSuccessMessage = true
+                delay(1500) // Show motivational message for 1.5 seconds
+                if (pagerState.currentPage == 0) {
+                    pagerState.animateScrollToPage(1)
+                }
+                showSuccessMessage = false
+            }
+        }
 
         Column(modifier = Modifier.fillMaxSize().background(Background).statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -963,7 +989,7 @@ fun ScreenCookingMode(
                 Spacer(Modifier.width(8.dp))
                 Column {
                     Text(if(isEs) "Modo Cocina" else "Cooking Mode", style = MaterialTheme.typography.labelLarge, color = Primary, fontWeight = FontWeight.Bold)
-                    Text(translateText(recipe?.name, currentLanguage.value), style = MaterialTheme.typography.titleMedium, color = OnBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(translateText(currentRecipe.name, currentLanguage.value), style = MaterialTheme.typography.titleMedium, color = OnBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
@@ -980,10 +1006,22 @@ fun ScreenCookingMode(
                 contentPadding = PaddingValues(32.dp),
                 pageSpacing = 16.dp
             ) { page ->
-                if (page == 0) {
-                    IntroStep(recipe!!, currentLanguage.value)
-                } else {
-                    CookingStep(page, steps[page - 1], isEs)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(-page.toFloat())
+                        .pageCurlTransition(page, pagerState)
+                ) {
+                    if (page == 0) {
+                        IntroStep(
+                            recipe = currentRecipe,
+                            lang = currentLanguage.value,
+                            checkedIngredients = checkedIngredients,
+                            showSuccessMessage = showSuccessMessage
+                        )
+                    } else {
+                        CookingStep(page, steps[page - 1], isEs)
+                    }
                 }
             }
             
@@ -1007,8 +1045,8 @@ fun ScreenCookingMode(
                         FloatingActionButton(
                             onClick = { 
                                 val textToRead = if(pagerState.currentPage == 0) {
-                                    if(isEs) "Vamos a preparar ${translateText(recipe?.name, "es")}. ¿Lista para empezar?" 
-                                    else "Let's prepare ${recipe?.name}. Ready to start?"
+                                    if(isEs) "Vamos a preparar ${translateText(currentRecipe.name, "es")}. ¿Lista para empezar?" 
+                                    else "Let's prepare ${currentRecipe.name}. Ready to start?"
                                 } else {
                                     steps[pagerState.currentPage - 1]
                                 }
@@ -1047,28 +1085,334 @@ fun ScreenCookingMode(
 }
 
 @Composable
-fun IntroStep(@Suppress("UNUSED_PARAMETER") recipe: RecipeModel, lang: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
-        Surface(modifier = Modifier.size(120.dp), shape = CircleShape, color = Primary.copy(alpha = 0.1f)) {
-            Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Restaurant, null, tint = Primary, modifier = Modifier.size(48.dp)) }
-        }
-        Spacer(Modifier.height(32.dp))
-        Text(if(lang == "es") "¡Prepárate!" else "Get Ready!", style = MaterialTheme.typography.headlineMedium, color = OnBackground, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        Text(
-            if(lang == "es") "Asegúrate de tener todos los ingredientes a la mano. Desliza para ver el primer paso." 
-            else "Make sure you have all the ingredients ready. Swipe to see the first step.",
-            textAlign = TextAlign.Center, color = TextMuted
+fun IntroStep(
+    recipe: RecipeModel,
+    lang: String,
+    checkedIngredients: MutableMap<String, Boolean>,
+    showSuccessMessage: Boolean
+) {
+    val isEs = lang == "es"
+    val ingredients = recipe.ingredients ?: emptyList()
+    
+    val totalCount = ingredients.size
+    val checkedCount = ingredients.count { checkedIngredients[it] == true }
+    val progress = if (totalCount > 0) checkedCount.toFloat() / totalCount.toFloat() else 0f
+    
+    val motivationalPhrase = remember(recipe.id) {
+        val phrasesEs = listOf(
+            "¡Excelente! Todo listo. ¡A cocinar! 🍳",
+            "¡Perfecto! Tienes todo a la mano. ✨",
+            "¡Genial! Chef, iniciemos la magia. 👩‍🍳",
+            "¡Todo listo! ¡Manos a la obra! 👨‍🍳"
         )
+        val phrasesEn = listOf(
+            "Awesome! All set. Let's cook! 🍳",
+            "Perfect! You have everything ready. ✨",
+            "Great! Chef, let's start the magic. 👩‍🍳",
+            "All set! Let's get to work! 👨‍🍳"
+        )
+        if (isEs) phrasesEs.random() else phrasesEn.random()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background.copy(alpha = 0.3f))
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(16.dp))
+            Surface(
+                modifier = Modifier
+                    .size(80.dp)
+                    .pulseAnimation(durationMillis = 2000, scaleRange = 0.08f),
+                shape = CircleShape,
+                color = Primary.copy(alpha = 0.1f),
+                border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Rounded.Restaurant,
+                        null,
+                        tint = Primary,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+            
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = if (isEs) "Reúne tus ingredientes" else "Gather your ingredients",
+                style = MaterialTheme.typography.titleLarge,
+                color = OnBackground,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center
+            )
+            
+            Text(
+                text = if (isEs) "Marca cada ingrediente para comenzar" else "Check each ingredient to start",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            
+            Spacer(Modifier.height(20.dp))
+            
+            // Progress Section
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Surface.copy(alpha = 0.4f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = if (isEs) "Progreso de preparación" else "Preparation progress",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextMuted
+                            )
+                            Text(
+                                text = "$checkedCount / $totalCount (${(progress * 100).toInt()}%)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(CircleShape),
+                            color = Primary,
+                            trackColor = Surface
+                        )
+                    }
+                }
+            }
+            
+            Spacer(Modifier.height(20.dp))
+            
+            // Ingredients list
+            if (ingredients.isEmpty()) {
+                Text(
+                    text = if (isEs) "No se encontraron ingredientes." else "No ingredients found.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextMuted,
+                    modifier = Modifier.padding(24.dp)
+                )
+            } else {
+                ingredients.forEach { ingredient ->
+                    val isChecked = checkedIngredients[ingredient] == true
+                    
+                    val cardBgColor by animateColorAsState(
+                        targetValue = if (isChecked) Primary.copy(alpha = 0.12f) else Surface.copy(alpha = 0.6f),
+                        label = "cardBgColor"
+                    )
+                    val cardBorderColor by animateColorAsState(
+                        targetValue = if (isChecked) Primary.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.08f),
+                        label = "cardBorderColor"
+                    )
+                    val textColor by animateColorAsState(
+                        targetValue = if (isChecked) TextMuted else OnBackground,
+                        label = "textColor"
+                    )
+                    val checkboxColor by animateColorAsState(
+                        targetValue = if (isChecked) Primary else TextMuted.copy(alpha = 0.5f),
+                        label = "checkboxColor"
+                    )
+                    
+                    BouncyPressEffect(squishFactor = 0.98f) { modifier, interactionSource ->
+                        Surface(
+                            onClick = {
+                                checkedIngredients[ingredient] = !isChecked
+                            },
+                            interactionSource = interactionSource,
+                            modifier = modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            color = cardBgColor,
+                            border = BorderStroke(1.dp, cardBorderColor)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isChecked) Primary else Color.Transparent
+                                        )
+                                        .border(
+                                            width = 2.dp,
+                                            color = checkboxColor,
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isChecked) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = OnPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                
+                                Spacer(Modifier.width(16.dp))
+                                
+                                Text(
+                                    text = ingredient,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        textDecoration = if (isChecked) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
+                                        fontWeight = if (isChecked) FontWeight.Normal else FontWeight.Medium
+                                    ),
+                                    color = textColor,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+        
+        // Success congratulations card overlay
+        if (showSuccessMessage) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .shimmerGlow(durationMillis = 2000)
+                        .pulseAnimation(durationMillis = 1500, scaleRange = 0.03f),
+                    shape = RoundedCornerShape(24.dp),
+                    color = Surface,
+                    border = BorderStroke(2.dp, Primary),
+                    tonalElevation = 16.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(70.dp),
+                            shape = CircleShape,
+                            color = Primary
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Celebration,
+                                    contentDescription = null,
+                                    tint = OnPrimary,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
+                        }
+                        
+                        Spacer(Modifier.height(20.dp))
+                        
+                        Text(
+                            text = if (isEs) "¡Todo Listo!" else "All Set!",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = OnBackground,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(Modifier.height(12.dp))
+                        
+                        Text(
+                            text = motivationalPhrase,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = OnSurface,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                        
+                        Spacer(Modifier.height(20.dp))
+                        
+                        CircularProgressIndicator(
+                            color = Primary,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun CookingStep(number: Int, text: String, isEs: Boolean) {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-        Text(text = if(isEs) "PASO $number" else "STEP $number", style = MaterialTheme.typography.labelLarge, color = Primary, fontWeight = FontWeight.Black)
-        Spacer(Modifier.height(24.dp))
-        Text(text = text, style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 36.sp, fontWeight = FontWeight.Medium), color = OnBackground)
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = Surface.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+        tonalElevation = 4.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(28.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                color = Primary.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(50),
+                border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
+            ) {
+                Text(
+                    text = if (isEs) "PASO $number" else "STEP $number",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Primary,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+            
+            Spacer(Modifier.height(32.dp))
+            
+            Text(
+                text = text,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    lineHeight = 38.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = OnBackground
+            )
+        }
     }
 }
 
