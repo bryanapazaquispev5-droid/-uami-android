@@ -109,6 +109,46 @@ val ArequipaSupermarkets = listOf(
         LatLng(-16.4038, -71.5362),
         "Mercado Tradicional",
         4.6f
+    ),
+    Supermarket(
+        7,
+        "Tiendas Mass Yanahuara",
+        "Av. Ejército 415, Yanahuara, Arequipa",
+        LatLng(-16.3912, -71.5419),
+        "Tienda de Conveniencia",
+        4.1f
+    ),
+    Supermarket(
+        8,
+        "Tiendas Mass Umacollo",
+        "Calle Garcilaso de la Vega 204, Umacollo, Arequipa",
+        LatLng(-16.3995, -71.5453),
+        "Tienda de Conveniencia",
+        4.0f
+    ),
+    Supermarket(
+        9,
+        "Tiendas Mass Cayma",
+        "Av. Cayma 512, Cayma, Arequipa",
+        LatLng(-16.3768, -71.5428),
+        "Tienda de Conveniencia",
+        4.2f
+    ),
+    Supermarket(
+        10,
+        "Tambo Cayma",
+        "Av. Ejército 702, Cayma, Arequipa",
+        LatLng(-16.3792, -71.5434),
+        "Tienda de Conveniencia",
+        4.3f
+    ),
+    Supermarket(
+        11,
+        "Tambo Av. Venezuela",
+        "Av. Venezuela 810, Cercado, Arequipa",
+        LatLng(-16.4069, -71.5244),
+        "Tienda de Conveniencia",
+        4.1f
     )
 )
 
