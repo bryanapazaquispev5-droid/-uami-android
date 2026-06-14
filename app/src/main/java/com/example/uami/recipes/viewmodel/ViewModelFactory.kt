@@ -25,6 +25,9 @@ class ViewModelFactory(
                 val nutritionistManager = NutritionistAIManager(AIContext)
                 NutritionistViewModel(repository, nutritionistManager) as T
             }
+            modelClass.isAssignableFrom(ReviewsViewModel::class.java) -> {
+                ReviewsViewModel() as T
+            }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }

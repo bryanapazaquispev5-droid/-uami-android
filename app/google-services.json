@@ -12,7 +12,20 @@
           "package_name": "com.example.uami"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "69412052401-uu2keo9hgo6gsq8j7en8t7ucp1fkl3ee.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.uami",
+            "certificate_hash": "2fcd2af7a08594057184feedd1cb5a10b4c7979d"
+          }
+        },
+        {
+          "client_id": "69412052401-eakc7kptv5n9d6ovhlhi3m291qgfmtvu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDnX9VGp2QVhIy_3VWoKSBuYi_vUnkj6Gk"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "69412052401-eakc7kptv5n9d6ovhlhi3m291qgfmtvu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

@@ -49,6 +49,8 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.uami.recipes.data.RecipeRepository
 import com.example.uami.recipes.viewmodel.MainViewModel
 import com.example.uami.recipes.viewmodel.ViewModelFactory
+import com.example.uami.recipes.viewmodel.ReviewsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 import android.speech.tts.TextToSpeech
 import android.Manifest
@@ -287,7 +289,7 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                 }
             }
             else -> {
-                Contenido(paddingValues, navController, repository.servicioRecipes, favoritosLocal, tts, onSpeechFinished, currentLanguageLocal, globalRecipesState)
+                Contenido(paddingValues, navController, repository.servicioRecipes, favoritosLocal, tts, onSpeechFinished, currentLanguageLocal, globalRecipesState, factory)
             }
         }
     }
@@ -497,8 +499,12 @@ fun Contenido(
     tts: TextToSpeech?,
     onSpeechFinished: MutableState<(() -> Unit)?>,
     currentLanguage: MutableState<String>,
-    preloadedRecipes: List<RecipeModel>
+    preloadedRecipes: List<RecipeModel>,
+    factory: ViewModelFactory
 ) {
+    val activity = LocalContext.current.findActivity()!!
+    val reviewsViewModel: ReviewsViewModel = viewModel(viewModelStoreOwner = activity, factory = factory)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -529,7 +535,8 @@ fun Contenido(
                     navController = navController, 
                     currentLanguage = currentLanguage, 
                     preloadedRecipes = preloadedRecipes, 
-                    favoritos = favoritos
+                    favoritos = favoritos,
+                    factory = factory
                 ) 
             }
             composable("recetas") { ScreenRecipeMenu(navController, currentLanguage) }
@@ -584,6 +591,22 @@ fun Contenido(
             composable("supermercados") {
                 ScreenSupermarkets(navController, currentLanguage)
             }
+            composable("opiniones") {
+                ScreenOpiniones(
+                    onBack = { navController.popBackStack() },
+                    onNavigateToLogin = { navController.navigate("perfil") },
+                    currentLanguage = currentLanguage,
+                    reviewsViewModel = reviewsViewModel
+                )
+            }
+            composable("perfil") {
+                ScreenPerfil(
+                    onBack = { navController.popBackStack() },
+                    currentLanguage = currentLanguage,
+                    reviewsViewModel = reviewsViewModel,
+                    favoritosSize = favoritos.size
+                )
+            }
         }
     }
 }
@@ -593,8 +616,11 @@ fun ScreenInicio(
     navController: NavHostController,
     currentLanguage: MutableState<String>,
     preloadedRecipes: List<RecipeModel>,
-    favoritos: MutableList<Int>
+    favoritos: MutableList<Int>,
+    factory: ViewModelFactory
 ) {
+    val reviewsViewModel: ReviewsViewModel = viewModel(factory = factory)
+    val userProfile by reviewsViewModel.userProfile.collectAsState()
     val isEs = currentLanguage.value == "es"
     val scrollState = rememberScrollState()
 
@@ -733,20 +759,16 @@ fun ScreenInicio(
                     modifier = modifier
                         .size(50.dp)
                         .clickable(interactionSource = interactionSource, indication = androidx.compose.foundation.LocalIndication.current) {
-                            // Decorativo, rebota al hacer clic
+                            navController.navigate("perfil")
                         },
                     shape = CircleShape,
                     color = Primary.copy(alpha = 0.15f),
                     border = BorderStroke(1.5.dp, Primary)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Rounded.Person,
-                            contentDescription = "Profile",
-                            tint = Primary,
-                            modifier = Modifier
-                                .size(28.dp)
-                                .pulseAnimation(durationMillis = 2000, scaleRange = 0.10f)
+                        UserAvatar(
+                            photoUrl = userProfile?.photoUrl ?: "",
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -1048,6 +1070,62 @@ fun ScreenInicio(
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = if (isEs) "Ver supermercados y mercados en Arequipa" else "Find nearby supermarkets and markets in Arequipa",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // --- SECCIÓN DE OPINIONES Y COMENTARIOS ---
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .clickable {
+                    navController.navigate("opiniones")
+                },
+            color = Surface,
+            border = BorderStroke(1.dp, Primary.copy(alpha = 0.15f))
+        ) {
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(Primary.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Forum,
+                        contentDescription = null,
+                        tint = Primary,
+                        modifier = Modifier.size(26.dp).bobbingAnimation(durationMillis = 2000, dy = 3f)
+                    )
+                }
+                
+                Spacer(Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isEs) "Opiniones de la Comunidad" else "Community Reviews",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = OnSurface
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (isEs) "Califica la app y comparte comentarios con otros Chefs" else "Rate the app and share feedback with other Chefs",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextMuted
                     )
