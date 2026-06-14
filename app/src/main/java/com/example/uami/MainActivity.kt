@@ -296,11 +296,33 @@ fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableSt
         else -> 0
     }
 
+    // Anti-spam configuration (Debounce + launchSingleTop)
+    var lastClickTime by remember { mutableStateOf(0L) }
+    val safeNavigate = { targetRoute: String ->
+        val currentTime = System.currentTimeMillis()
+        // Check 1: Do not navigate if we are already on the target screen
+        // Check 2: Block rapid multiple clicks (throttle at 600ms)
+        if (currentRoute != targetRoute && currentTime - lastClickTime > 600) {
+            lastClickTime = currentTime
+            navController.navigate(targetRoute) {
+                // Return to home start destination to avoid massive backstack accumulation
+                popUpTo(navController.graph.startDestinationId) {
+                    saveState = true
+                }
+                // Avoid multiple copies of the same screen at the top of the stack
+                launchSingleTop = true
+                // Restore state (e.g. scroll position) when returning to this tab
+                restoreState = true
+            }
+        }
+    }
+
     Surface(
         modifier = Modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 24.dp, vertical = 12.dp)
             .clip(RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp), // Fix corners shadow rendering
         color = Surface.copy(alpha = 0.92f), // Sleek semi-transparent glass
         tonalElevation = 10.dp,
         border = BorderStroke(1.dp, Primary.copy(alpha = 0.15f)) // Premium border stroke
@@ -348,7 +370,7 @@ fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableSt
                         icon = Icons.Rounded.Explore,
                         label = if (currentLanguage.value == "es") "Explorar" else "Explore",
                         selected = selectedIndex == 0,
-                        onClick = { navController.navigate("inicio") }
+                        onClick = { safeNavigate("inicio") }
                     )
                 }
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -356,7 +378,7 @@ fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableSt
                         icon = Icons.Rounded.RestaurantMenu,
                         label = if (currentLanguage.value == "es") "Recetas" else "Recipes",
                         selected = selectedIndex == 1,
-                        onClick = { navController.navigate("recetas") }
+                        onClick = { safeNavigate("recetas") }
                     )
                 }
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -364,7 +386,7 @@ fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableSt
                         icon = Icons.Rounded.Psychology,
                         label = if (currentLanguage.value == "es") "Nutriólogo" else "Nutrition",
                         selected = selectedIndex == 2,
-                        onClick = { navController.navigate("nutriologo") }
+                        onClick = { safeNavigate("nutriologo") }
                     )
                 }
             }
