@@ -445,6 +445,7 @@ fun ScreenSupermarkets(
                                         selectedFilter = filter
                                         selectedSupermarket = null
                                     },
+                                shape = RoundedCornerShape(14.dp),
                                 color = if (isSelected) chipColor else Surface.copy(alpha = 0.8f),
                                 border = BorderStroke(1.dp, if (isSelected) chipColor else Surface.copy(alpha = 0.4f)),
                                 tonalElevation = 2.dp
@@ -585,6 +586,7 @@ fun SupermarketCard(
                 if (isSelected) Modifier.shimmerGlow(durationMillis = 2200, glowColor = typeColor.copy(alpha = 0.22f))
                 else Modifier
             ),
+        shape = RoundedCornerShape(24.dp),
         color = Surface.copy(alpha = 0.88f),
         tonalElevation = 6.dp,
         border = BorderStroke(
