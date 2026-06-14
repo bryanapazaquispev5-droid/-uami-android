@@ -26,7 +26,7 @@ class ViewModelFactory(
                 NutritionistViewModel(repository, nutritionistManager) as T
             }
             modelClass.isAssignableFrom(ReviewsViewModel::class.java) -> {
-                ReviewsViewModel() as T
+                ReviewsViewModel(repository) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }

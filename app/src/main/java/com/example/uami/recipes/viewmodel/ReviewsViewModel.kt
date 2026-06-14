@@ -7,20 +7,26 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.uami.recipes.data.RecipeRepository
 import com.example.uami.recipes.models.ReviewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 
-class ReviewsViewModel : ViewModel() {
+class ReviewsViewModel(private val repository: RecipeRepository) : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
+    private var userDocListener: ListenerRegistration? = null
 
     private val _currentUser = MutableStateFlow<FirebaseUser?>(auth.currentUser)
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
@@ -29,6 +35,9 @@ class ReviewsViewModel : ViewModel() {
 
     private val _userProfile = MutableStateFlow<UserProfileData?>(null)
     val userProfile: StateFlow<UserProfileData?> = _userProfile.asStateFlow()
+
+    private val _userFavorites = MutableStateFlow<List<Int>>(emptyList())
+    val userFavorites: StateFlow<List<Int>> = _userFavorites.asStateFlow()
 
     private val _reviews = MutableStateFlow<List<ReviewModel>>(emptyList())
     val reviews: StateFlow<List<ReviewModel>> = _reviews.asStateFlow()
@@ -45,36 +54,71 @@ class ReviewsViewModel : ViewModel() {
             val user = firebaseAuth.currentUser
             _currentUser.value = user
             if (user == null) {
+                userDocListener?.remove()
+                userDocListener = null
                 _userProfile.value = null
+                _userFavorites.value = emptyList()
             } else {
-                fetchUserProfile(user)
+                listenToUserProfile(user)
             }
         }
+        
+        // Sincronizar reactivamente los favoritos locales hacia Firestore
+        viewModelScope.launch {
+            repository.favoritos.collect { localFavs ->
+                if (_currentUser.value != null) {
+                    val firestoreFavs = _userFavorites.value
+                    if (localFavs != firestoreFavs) {
+                        saveFavoritesToFirestore(localFavs)
+                    }
+                }
+            }
+        }
+
         // Cargar reseñas iniciales
         loadReviews()
     }
 
-    private fun fetchUserProfile(user: FirebaseUser) {
-        firestore.collection("users").document(user.uid).get()
-            .addOnSuccessListener { doc ->
-                if (doc.exists()) {
+    private fun listenToUserProfile(user: FirebaseUser) {
+        userDocListener?.remove()
+        userDocListener = firestore.collection("users").document(user.uid)
+            .addSnapshotListener { doc, error ->
+                if (error != null) {
+                    Log.e("FIRESTORE", "Error al escuchar perfil del usuario: ${error.message}")
+                    _userProfile.value = UserProfileData(user.uid, user.displayName ?: "Chef", user.photoUrl?.toString() ?: "avatar_1")
+                    return@addSnapshotListener
+                }
+
+                if (doc != null && doc.exists()) {
                     val displayName = doc.getString("displayName") ?: user.displayName ?: "Chef"
                     val photoUrl = doc.getString("photoUrl") ?: user.photoUrl?.toString() ?: "avatar_1"
                     _userProfile.value = UserProfileData(user.uid, displayName, photoUrl)
+
+                    val rawFavs = doc.get("favorites") as? List<*>
+                    val firestoreFavs = rawFavs?.mapNotNull { (it as? Number)?.toInt() } ?: emptyList()
+                    _userFavorites.value = firestoreFavs
+
+                    // Sync favorites: Union local and cloud
+                    val localFavs = repository.favoritos.value
+                    if (localFavs != firestoreFavs) {
+                        val union = (localFavs.toSet() + firestoreFavs.toSet()).toList()
+                        repository.saveFavorites(union)
+                        saveFavoritesToFirestore(union)
+                    }
                 } else {
                     // Create document for user
                     val displayName = user.displayName ?: "Chef"
                     val photoUrl = user.photoUrl?.toString() ?: "avatar_1"
+                    val localFavs = repository.favoritos.value
                     val data = hashMapOf(
                         "displayName" to displayName,
-                        "photoUrl" to photoUrl
+                        "photoUrl" to photoUrl,
+                        "favorites" to localFavs
                     )
                     firestore.collection("users").document(user.uid).set(data)
                     _userProfile.value = UserProfileData(user.uid, displayName, photoUrl)
+                    _userFavorites.value = localFavs
                 }
-            }
-            .addOnFailureListener {
-                _userProfile.value = UserProfileData(user.uid, user.displayName ?: "Chef", user.photoUrl?.toString() ?: "avatar_1")
             }
     }
 
@@ -276,9 +320,45 @@ class ReviewsViewModel : ViewModel() {
     }
 
     fun signOut() {
+        userDocListener?.remove()
+        userDocListener = null
         auth.signOut()
         _currentUser.value = null
         _userProfile.value = null
+        _userFavorites.value = emptyList()
+    }
+
+    fun saveFavoritesToFirestore(favorites: List<Int>) {
+        val user = auth.currentUser ?: return
+        firestore.collection("users").document(user.uid)
+            .update("favorites", favorites)
+            .addOnFailureListener {
+                val data = hashMapOf("favorites" to favorites)
+                firestore.collection("users").document(user.uid)
+                    .set(data, com.google.firebase.firestore.SetOptions.merge())
+            }
+    }
+
+    fun toggleLikeReview(reviewId: String, userId: String) {
+        val reviewDoc = firestore.collection("reviews").document(reviewId)
+        reviewDoc.get().addOnSuccessListener { doc ->
+            if (doc.exists()) {
+                val likedBy = doc.get("likedBy") as? List<*> ?: emptyList<Any>()
+                val isLiked = likedBy.contains(userId)
+
+                if (isLiked) {
+                    reviewDoc.update(
+                        "likedBy", FieldValue.arrayRemove(userId),
+                        "likesCount", FieldValue.increment(-1)
+                    )
+                } else {
+                    reviewDoc.update(
+                        "likedBy", FieldValue.arrayUnion(userId),
+                        "likesCount", FieldValue.increment(1)
+                    )
+                }
+            }
+        }
     }
 
     fun loadReviews() {
@@ -301,7 +381,10 @@ class ReviewsViewModel : ViewModel() {
                         val comment = doc.getString("comment") ?: ""
                         val rating = doc.getLong("rating")?.toInt() ?: 5
                         val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
-                        ReviewModel(id, userId, userName, userPhotoUrl, comment, rating, timestamp)
+                        val likesCount = doc.getLong("likesCount")?.toInt() ?: 0
+                        val likedBy = doc.get("likedBy") as? List<*> ?: emptyList<Any>()
+                        val likedByList = likedBy.mapNotNull { it?.toString() }
+                        ReviewModel(id, userId, userName, userPhotoUrl, comment, rating, timestamp, likesCount, likedByList)
                     }
                     _reviews.value = reviewsList
                 }
@@ -326,7 +409,9 @@ class ReviewsViewModel : ViewModel() {
             "userPhotoUrl" to userPhotoUrlValue,
             "comment" to comment,
             "rating" to rating,
-            "timestamp" to System.currentTimeMillis()
+            "timestamp" to System.currentTimeMillis(),
+            "likesCount" to 0,
+            "likedBy" to emptyList<String>()
         )
 
         firestore.collection("reviews")

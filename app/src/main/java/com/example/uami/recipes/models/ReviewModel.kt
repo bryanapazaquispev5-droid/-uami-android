@@ -7,5 +7,7 @@ data class ReviewModel(
     val userPhotoUrl: String = "",
     val comment: String = "",
     val rating: Int = 5,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val likesCount: Int = 0,
+    val likedBy: List<String> = emptyList()
 )

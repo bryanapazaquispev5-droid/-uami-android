@@ -40,8 +40,12 @@ class MainViewModel(private val repository: RecipeRepository) : ViewModel() {
     val favoritos: StateFlow<List<Int>> = _favoritos.asStateFlow()
 
     init {
-        // Cargar favoritos iniciales desde el repositorio
-        _favoritos.value = repository.loadFavorites()
+        // Cargar favoritos reactivamente desde el repositorio
+        viewModelScope.launch {
+            repository.favoritos.collect {
+                _favoritos.value = it
+            }
+        }
         
         // Si hay cache local, cargarlo inmediatamente para permitir inicio rápido offline
         if (repository.hasCache()) {
@@ -90,18 +94,16 @@ class MainViewModel(private val repository: RecipeRepository) : ViewModel() {
     }
 
     fun toggleFavorite(recipeId: Int) {
-        val currentFavs = _favoritos.value.toMutableList()
+        val currentFavs = repository.favoritos.value.toMutableList()
         if (currentFavs.contains(recipeId)) {
             currentFavs.remove(recipeId)
         } else {
             currentFavs.add(recipeId)
         }
-        _favoritos.value = currentFavs
         repository.saveFavorites(currentFavs)
     }
 
     fun setFavorites(favorites: List<Int>) {
-        _favoritos.value = favorites
         repository.saveFavorites(favorites)
     }
 

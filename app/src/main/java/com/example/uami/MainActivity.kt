@@ -192,6 +192,9 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
     val mainViewModel = remember(activity) {
         ViewModelProvider(activity, factory)[MainViewModel::class.java]
     }
+    val reviewsViewModel = remember(activity) {
+        ViewModelProvider(activity, factory)[ReviewsViewModel::class.java]
+    }
 
     val currentLanguageState by mainViewModel.currentLanguage.collectAsState()
     val globalRecipesState by mainViewModel.globalRecipes.collectAsState()
@@ -218,17 +221,12 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
         }
     }
 
-    // Sync favorites
+    // Sync favorites list with ViewModel state (View-only observation)
     val favoritosLocal = remember { mutableStateListOf<Int>() }
     LaunchedEffect(favoritosState) {
         if (favoritosLocal.toList() != favoritosState) {
             favoritosLocal.clear()
             favoritosLocal.addAll(favoritosState)
-        }
-    }
-    LaunchedEffect(favoritosLocal.toList()) {
-        if (favoritosLocal.toList() != favoritosState) {
-            mainViewModel.setFavorites(favoritosLocal.toList())
         }
     }
 
@@ -289,7 +287,7 @@ fun ProgPrincipal9(tts: TextToSpeech?) {
                 }
             }
             else -> {
-                Contenido(paddingValues, navController, repository.servicioRecipes, favoritosLocal, tts, onSpeechFinished, currentLanguageLocal, globalRecipesState, factory)
+                Contenido(paddingValues, navController, repository.servicioRecipes, favoritosLocal, tts, onSpeechFinished, currentLanguageLocal, globalRecipesState, factory, reviewsViewModel)
             }
         }
     }
@@ -500,10 +498,10 @@ fun Contenido(
     onSpeechFinished: MutableState<(() -> Unit)?>,
     currentLanguage: MutableState<String>,
     preloadedRecipes: List<RecipeModel>,
-    factory: ViewModelFactory
+    factory: ViewModelFactory,
+    reviewsViewModel: ReviewsViewModel
 ) {
     val activity = LocalContext.current.findActivity()!!
-    val reviewsViewModel: ReviewsViewModel = viewModel(viewModelStoreOwner = activity, factory = factory)
 
     Box(
         modifier = Modifier
