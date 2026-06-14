@@ -394,12 +394,21 @@ class NutritionistAIManager(private val context: Context) {
 
         for (day in days) {
             val breakfast = selectMeal(fallbackBreakfasts, favoriteRecipes, favoriteCuisines, rand)
-            val lunch = selectMeal(fallbackLunches, favoriteRecipes, favoriteCuisines, rand)
-            var dinner = selectMeal(fallbackLunches, favoriteRecipes, favoriteCuisines, rand)
-            if (dinner.id == lunch.id && fallbackLunches.size > 1) {
-                val alternativeList = fallbackLunches.filter { it.id != lunch.id }
-                dinner = selectMeal(alternativeList, favoriteRecipes, favoriteCuisines, rand)
-            }
+            
+            // Asegurar que el almuerzo no repita el desayuno
+            val filteredLunches = fallbackLunches.filter { it.id != breakfast.id }
+            val lunch = selectMeal(filteredLunches.ifEmpty { fallbackLunches }, favoriteRecipes, favoriteCuisines, rand)
+            
+            // Asegurar que la cena no repita desayuno ni almuerzo
+            val filteredDinners = fallbackLunches.filter { it.id != breakfast.id && it.id != lunch.id }
+            val dinner = selectMeal(
+                filteredDinners.ifEmpty { 
+                    fallbackLunches.filter { it.id != lunch.id }.ifEmpty { fallbackLunches } 
+                }, 
+                favoriteRecipes, 
+                favoriteCuisines, 
+                rand
+            )
 
             plans.add(DietDayPlan(day, breakfast, lunch, dinner))
         }
@@ -559,6 +568,25 @@ class NutritionistAIManager(private val context: Context) {
                 if (breakfastPart.isNotBlank()) breakfast = matchRecipe(breakfastPart, fallbackBreakfasts)
                 if (lunchPart.isNotBlank()) lunch = matchRecipe(lunchPart, fallbackLunches)
                 if (dinnerPart.isNotBlank()) dinner = matchRecipe(dinnerPart, fallbackLunches)
+            }
+            
+            // Asegurar que no se repitan comidas en el mismo día
+            if (lunch.id == breakfast.id) {
+                val altLunches = fallbackLunches.filter { it.id != breakfast.id }
+                if (altLunches.isNotEmpty()) {
+                    lunch = altLunches[rand.nextInt(altLunches.size)]
+                }
+            }
+            if (dinner.id == lunch.id || dinner.id == breakfast.id) {
+                val altDinners = fallbackLunches.filter { it.id != lunch.id && it.id != breakfast.id }
+                if (altDinners.isNotEmpty()) {
+                    dinner = altDinners[rand.nextInt(altDinners.size)]
+                } else {
+                    val altDinners2 = fallbackLunches.filter { it.id != lunch.id }
+                    if (altDinners2.isNotEmpty()) {
+                        dinner = altDinners2[rand.nextInt(altDinners2.size)]
+                    }
+                }
             }
             
             plans.add(DietDayPlan(day, breakfast, lunch, dinner))
