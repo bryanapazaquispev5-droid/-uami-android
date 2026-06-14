@@ -10,6 +10,7 @@
 *   **Asistente de Voz (TTS):** Lectura por síntesis de voz del paso actual para cocinar con manos libres.
 *   **Nutriólogo AI Local:** Un planificador de dietas y menús de 7 días impulsado por **Gemma-2B** corriendo localmente en el procesador del dispositivo, garantizando privacidad total y funcionamiento sin internet.
 *   **Traducción Inteligente On-Device:** Traducción en tiempo real de recetas del inglés al español usando **Google ML Kit**.
+*   **Explorador de Supermercados (Google Maps):** Mapa interactivo de supermercados y mercados tradicionales en Arequipa con estilo oscuro personalizado para buscar los ingredientes, y enlace a navegación con Google Maps.
 *   **Diseño Premium y Fluido:** Interfaz oscura, efectos de deformación elástica (bouncy click), animaciones Lottie y confeti dinámico para marcar favoritos.
 
 ---
@@ -21,6 +22,7 @@
 *   **Consumo de APIs:** Retrofit 2 + OkHttp (para descargar catálogo de recetas)
 *   **Manejo de Imágenes:** Coil Compose (con descarga y almacenamiento local en caché)
 *   **Animaciones:** Lottie Compose + confeti vectorial personalizado en Canvas
+*   **Servicios de Mapas:** Google Maps SDK para Android + Jetpack Compose Maps wrapper
 *   **Navegación:** Jetpack Navigation Compose
 *   **Inteligencia Artificial Local:**
     *   **Google MediaPipe Tasks GenAI** (Inferencia de LLM local)
@@ -73,5 +75,10 @@ Para que el Nutriólogo AI funcione, la aplicación necesita el modelo de lengua
 *   **Descarga Manual:** Puedes descargar el archivo desde HuggingFace y transferirlo al dispositivo en la carpeta interna de la app:
     `Android/data/com.example.uami/files/gemma-2b-it-cpu-int4.bin`
 
-### 3. API Keys
-*   Este proyecto **no requiere de ninguna credencial o API Key** en la nube (todas las dependencias de inteligencia artificial y traducción se ejecutan de forma local y offline).
+### 3. API Keys de Servicios Externos
+*   **Inteligencia Artificial y Traducción:** Este proyecto **no requiere de ninguna credencial o API Key** en la nube (las dependencias de IA y traducción se ejecutan local y offline).
+*   **Google Maps SDK:** El mapa interactivo utiliza una API Key. Por seguridad, la clave se lee de tu archivo local no trackeado. Puedes configurar tu clave en el archivo `local.properties` del proyecto raíz:
+    ```properties
+    MAPS_API_KEY=AIzaSyTuClaveRealDeGoogleMapsAqui
+    ```
+    Si no se especifica ninguna clave, el build de Gradle utilizará un valor de demostración por defecto (`AIzaSyDummyKeyForGoogleMapsShowcase`), el cual te permitirá compilar y ver el mapa (aunque Google Maps podría mostrar marcas de agua o cuadrículas si la clave no es válida).
