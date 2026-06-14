@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "69412052401",
+    "project_id": "uami-3bfe5",
+    "storage_bucket": "uami-3bfe5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:69412052401:android:94ab6857d108d55b723190",
+        "android_client_info": {
+          "package_name": "com.example.uami"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnX9VGp2QVhIy_3VWoKSBuYi_vUnkj6Gk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -51,6 +51,12 @@ import com.example.uami.recipes.viewmodel.MainViewModel
 import com.example.uami.recipes.viewmodel.ViewModelFactory
 
 import android.speech.tts.TextToSpeech
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.firebase.messaging.FirebaseMessaging
 import java.util.Locale
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -96,6 +102,25 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         
         // Inicializar TTS
         tts = TextToSpeech(this, this)
+
+        // Solicitar permisos de notificación en Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
+        // Obtener y loguear el token de Firebase Cloud Messaging
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                Log.w("FCM_TOKEN", "Fetching FCM registration token failed", task.exception)
+                return@addOnCompleteListener
+            }
+            val token = task.result
+            Log.d("FCM_TOKEN", "Firebase Cloud Messaging Token: $token")
+            val prefs = getSharedPreferences("uami_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putString("fcm_token", token).apply()
+        }
 
         setContent {
             MaterialTheme(
