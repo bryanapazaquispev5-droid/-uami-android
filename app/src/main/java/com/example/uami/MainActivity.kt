@@ -544,6 +544,9 @@ fun Contenido(
                     }
                 )
             }
+            composable("supermercados") {
+                ScreenSupermarkets(navController, currentLanguage)
+            }
         }
     }
 }
@@ -964,6 +967,61 @@ fun ScreenInicio(
                 modifier = Modifier.weight(1f)
             ) {
                 navController.navigate("recetas_lista?mealType=Appetizer")
+            }
+        }
+        Spacer(Modifier.height(28.dp))
+
+        // --- MAPA DE SUPERMERCADOS ---
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .clickable {
+                    navController.navigate("supermercados")
+                },
+            color = Surface,
+            border = BorderStroke(1.dp, Primary.copy(alpha = 0.15f))
+        ) {
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(Primary.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Map,
+                        contentDescription = null,
+                        tint = Primary,
+                        modifier = Modifier.size(26.dp).bobbingAnimation(durationMillis = 2000, dy = 3f)
+                    )
+                }
+                
+                Spacer(Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isEs) "¿Faltan ingredientes?" else "Missing ingredients?",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = OnSurface
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (isEs) "Ver supermercados y mercados en Arequipa" else "Find nearby supermarkets and markets in Arequipa",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
 

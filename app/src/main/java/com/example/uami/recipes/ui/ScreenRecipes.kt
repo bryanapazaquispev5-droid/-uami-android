@@ -890,11 +890,47 @@ fun ScreenRecipeDetail(navController: NavHostController, @Suppress("UNUSED_PARAM
                     }
 
                     Spacer(Modifier.height(36.dp))
-                    Text(
-                        text = if(isEs) "Ingredientes" else "Ingredients", 
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold), 
-                        color = OnBackground
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if(isEs) "Ingredientes" else "Ingredients", 
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold), 
+                            color = OnBackground
+                        )
+                        
+                        BouncyPressEffect(squishFactor = 0.8f) { modifier, interactionSource ->
+                            Surface(
+                                modifier = modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable(interactionSource = interactionSource, indication = null) {
+                                        navController.navigate("supermercados")
+                                    },
+                                color = Primary.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Map,
+                                        contentDescription = null,
+                                        tint = Primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isEs) "Buscar Tiendas" else "Find Stores",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = Primary
+                                    )
+                                }
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(16.dp))
                     recipe?.ingredients?.forEach { ing -> IngredientRow(ing) }
 
