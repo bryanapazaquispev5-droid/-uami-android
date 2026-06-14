@@ -11,6 +11,7 @@
 *   **Nutriólogo AI Local:** Un planificador de dietas y menús de 7 días impulsado por **Gemma-2B** corriendo localmente en el procesador del dispositivo, garantizando privacidad total y funcionamiento sin internet.
 *   **Traducción Inteligente On-Device:** Traducción en tiempo real de recetas del inglés al español usando **Google ML Kit**.
 *   **Explorador de Supermercados (Google Maps):** Mapa interactivo de supermercados y mercados tradicionales en Arequipa con estilo oscuro personalizado para buscar los ingredientes, y enlace a navegación con Google Maps.
+*   **Notificaciones Push Inteligentes (FCM):** Canal de notificaciones remotas mediante Firebase Cloud Messaging para alertas de recetas del día, sugerencias personalizadas de nutrición y tips de salud interactivos.
 *   **Diseño Premium y Fluido:** Interfaz oscura, efectos de deformación elástica (bouncy click), animaciones Lottie y confeti dinámico para marcar favoritos.
 
 ---
@@ -24,6 +25,9 @@
 *   **Animaciones:** Lottie Compose + confeti vectorial personalizado en Canvas
 *   **Servicios de Mapas:** Google Maps SDK para Android + Jetpack Compose Maps wrapper
 *   **Navegación:** Jetpack Navigation Compose
+*   **Servicios en la Nube / Firebase:**
+    *   **Firebase Cloud Messaging (FCM v1)** (Notificaciones Push remotas)
+    *   **Firebase Analytics** (Métricas de uso y rendimiento)
 *   **Inteligencia Artificial Local:**
     *   **Google MediaPipe Tasks GenAI** (Inferencia de LLM local)
     *   **Google Gemma-2B-it CPU Quantized** (Modelo de lenguaje local de 4 bits)
@@ -77,6 +81,7 @@ Para que el Nutriólogo AI funcione, la aplicación necesita el modelo de lengua
 
 ### 3. API Keys de Servicios Externos
 *   **Inteligencia Artificial y Traducción:** Este proyecto **no requiere de ninguna credencial o API Key** en la nube (las dependencias de IA y traducción se ejecutan local y offline).
+*   **Firebase Cloud Messaging:** El proyecto cuenta con un archivo `google-services.json` configurado en el directorio `/app` para enlazar la aplicación con el proyecto Firebase `uami-3bfe5`.
 *   **Google Maps SDK:** El mapa interactivo utiliza una API Key. Por seguridad, la clave se lee de tu archivo local no trackeado. Puedes configurar tu clave en el archivo `local.properties` del proyecto raíz:
     ```properties
     MAPS_API_KEY=AIzaSyTuClaveRealDeGoogleMapsAqui
