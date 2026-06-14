@@ -38,6 +38,12 @@ import com.example.uami.recipes.models.RecipeModel
 import com.example.uami.ui.theme.*
 import com.example.uami.utils.*
 import kotlinx.coroutines.launch
+import androidx.lifecycle.ViewModelProvider
+import androidx.activity.ComponentActivity
+import com.example.uami.recipes.data.RecipeRepository
+import com.example.uami.recipes.viewmodel.NutritionistViewModel
+import com.example.uami.recipes.viewmodel.ViewModelFactory
+import com.example.uami.findActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,45 +55,26 @@ fun ScreenNutritionist(
 ) {
     val context = LocalContext.current
     val isEs = currentLanguage.value == "es"
-    val scope = rememberCoroutineScope()
 
-    // Manager de IA Local
-    val nutritionistManager = remember { NutritionistAIManager(context) }
-    
-    val isModelReady by nutritionistManager.isModelReady.collectAsState()
-    val isInitializing by nutritionistManager.isInitializing.collectAsState()
-    val downloadProgress by nutritionistManager.downloadProgress.collectAsState()
+    // Obtener el ViewModel de la IA de nutrición
+    val activity = remember(context) { context.findActivity()!! }
+    val repository = remember { RecipeRepository(context.applicationContext) }
+    val factory = remember { ViewModelFactory(repository, context.applicationContext) }
+    val nutritionistViewModel = remember(activity) {
+        ViewModelProvider(activity, factory)[NutritionistViewModel::class.java]
+    }
 
-    var dietPlan by remember { mutableStateOf<List<DietDayPlan>>(emptyList()) }
-    var isGenerating by remember { mutableStateOf(false) }
-    
-    // Cargar plan guardado en caché si existe en SharedPreferences
-    val sharedPrefs = remember { context.getSharedPreferences("nutritionist_prefs", Context.MODE_PRIVATE) }
-    
-    LaunchedEffect(Unit) {
-        val savedPlanJson = sharedPrefs.getString("saved_diet_plan", null)
-        if (savedPlanJson != null) {
-            try {
-                // Recuperar plan decodificando los IDs de recetas
-                val gson = com.google.gson.Gson()
-                val type = object : com.google.gson.reflect.TypeToken<List<SavedDayPlanIds>>() {}.type
-                val savedIdsList: List<SavedDayPlanIds> = gson.fromJson(savedPlanJson, type)
-                
-                dietPlan = savedIdsList.map { savedDay ->
-                    DietDayPlan(
-                        dayName = savedDay.dayName,
-                        breakfast = allRecipes.find { it.id == savedDay.breakfastId } ?: allRecipes.first(),
-                        lunch = allRecipes.find { it.id == savedDay.lunchId } ?: allRecipes.first(),
-                        dinner = allRecipes.find { it.id == savedDay.dinnerId } ?: allRecipes.first()
-                    )
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+    val dietPlan by nutritionistViewModel.dietPlan.collectAsState()
+    val isGenerating by nutritionistViewModel.isGenerating.collectAsState()
+    val isModelReady by nutritionistViewModel.isModelReady.collectAsState()
+    val isInitializing by nutritionistViewModel.isInitializing.collectAsState()
+    val downloadProgress by nutritionistViewModel.downloadProgress.collectAsState()
+
+    // Cargar plan guardado en primer renderizado
+    LaunchedEffect(allRecipes) {
+        if (allRecipes.isNotEmpty()) {
+            nutritionistViewModel.loadSavedPlan(allRecipes)
         }
-        
-        // Pre-inicializar la IA en background
-        nutritionistManager.initializeLLM()
     }
 
     Scaffold(
@@ -118,26 +105,7 @@ fun ScreenNutritionist(
                 isEs = isEs,
                 dietPlan = dietPlan,
                 onGeneratePlan = {
-                    scope.launch {
-                        isGenerating = true
-                        
-                        // Aseguramos inicializar LLM si es necesario
-                        val initialized = nutritionistManager.initializeLLM()
-                        val newPlan = if (initialized) {
-                            nutritionistManager.generateAIDietPlan(allRecipes, favoriteIds, isEs)
-                        } else {
-                            nutritionistManager.generateOfflineDietPlan(allRecipes, favoriteIds, isEs)
-                        }
-                        
-                        dietPlan = newPlan
-                        
-                        // Guardar en cache local
-                        val savedIds = newPlan.map {
-                            SavedDayPlanIds(it.dayName, it.breakfast.id ?: 0, it.lunch.id ?: 0, it.dinner.id ?: 0)
-                        }
-                        sharedPrefs.edit().putString("saved_diet_plan", com.google.gson.Gson().toJson(savedIds)).apply()
-                        isGenerating = false
-                    }
+                    nutritionistViewModel.generateDietPlan(allRecipes, favoriteIds, isEs)
                 },
                 onNavigateToRecipe = onNavigateToRecipe
             )

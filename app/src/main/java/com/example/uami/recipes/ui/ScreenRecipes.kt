@@ -50,6 +50,13 @@ import com.example.uami.utils.*
 import com.example.uami.ui.filters.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import androidx.lifecycle.ViewModelProvider
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.platform.LocalContext
+import com.example.uami.recipes.data.RecipeRepository
+import com.example.uami.recipes.viewmodel.RecipesViewModel
+import com.example.uami.recipes.viewmodel.ViewModelFactory
+import com.example.uami.findActivity
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -181,17 +188,27 @@ fun ScreenRecipes(
     initialMealType: String = "All",
     initialDifficulty: String = "All"
 ) {
+    val context = LocalContext.current
     val isEs = currentLanguage.value == "es"
-    var allRecipes by remember { mutableStateOf(preloadedRecipes) }
-    var isLoading by remember { mutableStateOf(preloadedRecipes.isEmpty()) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    
-    // Cargar preferencia guardada (por defecto Lista Compacta)
-    var isListView by remember { mutableStateOf(LanguageManager.isListView()) }
-    
-    // Estado unificado de filtros
-    var filterState by remember(initialSearchQuery, initialCuisine, initialMealType, initialDifficulty) {
-        mutableStateOf(
+
+    // Obtener el ViewModel de recetas
+    val activity = remember(context) { context.findActivity()!! }
+    val repository = remember { RecipeRepository(context.applicationContext) }
+    val factory = remember { ViewModelFactory(repository, context.applicationContext) }
+    val recipesViewModel = remember(activity) {
+        ViewModelProvider(activity, factory)[RecipesViewModel::class.java]
+    }
+
+    val allRecipes by recipesViewModel.allRecipes.collectAsState()
+    val isLoading by recipesViewModel.isLoading.collectAsState()
+    val isRefreshing by recipesViewModel.isRefreshing.collectAsState()
+    val isListView by recipesViewModel.isListView.collectAsState()
+    val filterState by recipesViewModel.filterState.collectAsState()
+    val filteredAndSortedRecipes by recipesViewModel.filteredAndSortedRecipes.collectAsState()
+
+    // Configurar estado de filtros iniciales una sola vez
+    LaunchedEffect(initialSearchQuery, initialCuisine, initialMealType, initialDifficulty) {
+        recipesViewModel.updateFilterState(
             FilterState(
                 searchQuery = initialSearchQuery,
                 selectedCuisine = initialCuisine,
@@ -201,27 +218,11 @@ fun ScreenRecipes(
         )
     }
 
-    // Sincronizar con datos precargados
+    // Sincronizar con datos precargados o cargar desde cache
     LaunchedEffect(preloadedRecipes) {
-        if (preloadedRecipes.isNotEmpty()) {
-            allRecipes = preloadedRecipes
-            isLoading = false
-        }
+        recipesViewModel.loadRecipes(preloadedRecipes)
     }
 
-    LaunchedEffect(isRefreshing) {
-        if (isRefreshing) {
-            // Simular refresco para la UI, pero usando datos locales
-            kotlinx.coroutines.delay(500)
-            isRefreshing = false
-        }
-    }
-
-    // Aplicar lógica centralizada
-    val filteredAndSortedRecipes = remember(allRecipes, filterState) {
-        FilterLogic.applyFilters(allRecipes, filterState)
-    }
-    
     // Rastrear el índice máximo de receta que ha sido animado en pantalla
     var maxAnimatedIndex by remember(filteredAndSortedRecipes) { mutableIntStateOf(-1) }
 
@@ -255,8 +256,7 @@ fun ScreenRecipes(
                     BouncyPressEffect { modifier, interactionSource ->
                         IconButton(
                             onClick = { 
-                                isListView = !isListView 
-                                LanguageManager.setListView(isListView) // Guardar preferencia
+                                recipesViewModel.setListView(!isListView)
                             },
                             interactionSource = interactionSource,
                             modifier = modifier
@@ -274,7 +274,7 @@ fun ScreenRecipes(
 
                 OutlinedTextField(
                     value = filterState.searchQuery,
-                    onValueChange = { filterState = filterState.copy(searchQuery = it) },
+                    onValueChange = { recipesViewModel.updateSearchQuery(it) },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     placeholder = { Text(if(isEs) "Buscar receta..." else "Search recipe...", color = TextMuted) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Primary) },
@@ -283,7 +283,7 @@ fun ScreenRecipes(
                             if (filterState.searchQuery.isNotEmpty()) {
                                 BouncyPressEffect { modifier, interactionSource ->
                                     IconButton(
-                                        onClick = { filterState = filterState.copy(searchQuery = "") },
+                                        onClick = { recipesViewModel.updateSearchQuery("") },
                                         interactionSource = interactionSource,
                                         modifier = modifier
                                     ) {
@@ -321,7 +321,7 @@ fun ScreenRecipes(
                                 FilterBottomSheet(
                                     currentLanguage = currentLanguage,
                                     filterState = filterState,
-                                    onFilterChange = { filterState = it },
+                                    onFilterChange = { recipesViewModel.updateFilterState(it) },
                                     availableCuisines = remember(allRecipes) {
                                         allRecipes.mapNotNull { it.cuisineEn }.distinct().sorted()
                                     },
@@ -352,7 +352,7 @@ fun ScreenRecipes(
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isRefreshing,
-            onRefresh = { isRefreshing = true },
+            onRefresh = { recipesViewModel.refreshRecipes() },
             modifier = Modifier.padding(padding).fillMaxSize()
         ) {
             if (isLoading && !isRefreshing) {

@@ -45,6 +45,10 @@ import com.example.uami.utils.*
 import com.example.uami.recipes.ui.*
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import androidx.lifecycle.ViewModelProvider
+import com.example.uami.recipes.data.RecipeRepository
+import com.example.uami.recipes.viewmodel.MainViewModel
+import com.example.uami.recipes.viewmodel.ViewModelFactory
 
 import android.speech.tts.TextToSpeech
 import java.util.Locale
@@ -141,144 +145,124 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 }
 
+fun Context.findActivity(): ComponentActivity? {
+    var currentContext = this
+    while (currentContext is android.content.ContextWrapper) {
+        if (currentContext is ComponentActivity) {
+            return currentContext
+        }
+        currentContext = currentContext.baseContext
+    }
+    return null
+}
+
 @Composable
 fun ProgPrincipal9(tts: TextToSpeech?) {
-    val onSpeechFinished = remember { mutableStateOf<(() -> Unit)?>(null) }
-    val currentLanguage = remember { 
-        mutableStateOf(LanguageManager.getLanguage()) 
-    }
-    
-    // Estado global para las recetas
-    var globalRecipes by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
-    var isPreparingData by remember { mutableStateOf(false) }
-    var isDownloadFailed by remember { mutableStateOf(false) }
-    var isUpdateChecked by remember { mutableStateOf(false) } // NUEVO: Evita bucles infinitos
-    var downloadProgress by remember { mutableFloatStateOf(0f) }
-    var downloadStatus by remember { mutableStateOf("") }
-    var startupErrorMessage by remember { mutableStateOf("") }
-    
-    // Configuración Inicial
     val context = LocalContext.current
-    val favoriteManager = remember { FavoriteManager(context) }
-    val cacheManager = remember { RecipeCacheManager(context) }
+    val activity = remember(context) { context.findActivity()!! }
+    val repository = remember { RecipeRepository(context.applicationContext) }
+    val factory = remember { ViewModelFactory(repository, context.applicationContext) }
+    val mainViewModel = remember(activity) {
+        ViewModelProvider(activity, factory)[MainViewModel::class.java]
+    }
+
+    val currentLanguageState by mainViewModel.currentLanguage.collectAsState()
+    val globalRecipesState by mainViewModel.globalRecipes.collectAsState()
+    val isPreparingDataState by mainViewModel.isPreparingData.collectAsState()
+    val isDownloadFailedState by mainViewModel.isDownloadFailed.collectAsState()
+    val isUpdateCheckedState by mainViewModel.isUpdateChecked.collectAsState()
+    val downloadProgressState by mainViewModel.downloadProgress.collectAsState()
+    val downloadStatusState by mainViewModel.downloadStatus.collectAsState()
+    val startupErrorMessageState by mainViewModel.startupErrorMessage.collectAsState()
+    val favoritosState by mainViewModel.favoritos.collectAsState()
+
+    val onSpeechFinished = remember { mutableStateOf<(() -> Unit)?>(null) }
+    val currentLanguageLocal = remember { mutableStateOf(currentLanguageState) }
+    
+    // Sync local currentLanguageLocal with mainViewModel's currentLanguage
+    LaunchedEffect(currentLanguageState) {
+        if (currentLanguageLocal.value != currentLanguageState) {
+            currentLanguageLocal.value = currentLanguageState
+        }
+    }
+    LaunchedEffect(currentLanguageLocal.value) {
+        if (currentLanguageLocal.value != currentLanguageState) {
+            mainViewModel.setLanguage(currentLanguageLocal.value)
+        }
+    }
+
+    // Sync favorites
+    val favoritosLocal = remember { mutableStateListOf<Int>() }
+    LaunchedEffect(favoritosState) {
+        if (favoritosLocal.toList() != favoritosState) {
+            favoritosLocal.clear()
+            favoritosLocal.addAll(favoritosState)
+        }
+    }
+    LaunchedEffect(favoritosLocal.toList()) {
+        if (favoritosLocal.toList() != favoritosState) {
+            mainViewModel.setFavorites(favoritosLocal.toList())
+        }
+    }
+
     val navController = rememberNavController()
-    
-    val favoritos = remember { 
-        mutableStateListOf<Int>().apply { addAll(favoriteManager.loadFavorites()) } 
-    }
 
-    val okHttpClient = remember {
-        okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .addHeader("Bypass-Tunnel-Reminder", "true")
-                .addHeader("User-Agent", "Mozilla/5.0")
-                .build()
-            chain.proceed(request)
-        }.build()
-    }
-
-    val servicioRecipes = remember {
-        Retrofit.Builder().baseUrl("https://recetasc24.loca.lt/")
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create()).build()
-            .create(RecipeApiService::class.java)
-    }
-
-    val updateManager = remember { UpdateManager(context, servicioRecipes, cacheManager, okHttpClient) }
-    
     // Guardar el idioma cuando cambie
-    LaunchedEffect(currentLanguage.value) {
-        if (currentLanguage.value.isNotEmpty()) {
-            LanguageManager.setLanguage(currentLanguage.value)
-            tts?.language = if (currentLanguage.value == "es") Locale.forLanguageTag("es-ES") else Locale.US
+    LaunchedEffect(currentLanguageState) {
+        if (currentLanguageState.isNotEmpty()) {
+            tts?.language = if (currentLanguageState == "es") Locale.forLanguageTag("es-ES") else Locale.US
         }
     }
 
     // Lógica de Sincronización Modular
-    LaunchedEffect(currentLanguage.value, isPreparingData, isDownloadFailed) {
-        if (currentLanguage.value.isNotEmpty()) {
+    LaunchedEffect(currentLanguageState, isPreparingDataState, isDownloadFailedState) {
+        if (currentLanguageState.isNotEmpty()) {
             // Caso 1: Ya hay datos locales y NO hemos buscado actualizaciones aún
-            if (cacheManager.hasCache() && !isPreparingData && !isDownloadFailed && !isUpdateChecked) {
-                globalRecipes = cacheManager.loadRecipes()
+            if (repository.hasCache() && !isPreparingDataState && !isDownloadFailedState && !isUpdateCheckedState) {
                 Log.d("OFFLINE", "Cargado desde caché existente")
-                
                 if (isInternetAvailable(context)) {
-                    isPreparingData = true // Lanzar comprobación de red
+                    mainViewModel.setPreparingData(true)
                 } else {
-                    isUpdateChecked = true // No hay red, abrimos con lo que hay
+                    mainViewModel.setUpdateChecked(true)
                 }
             } 
             // Caso 2: Proceso de Sincronización Activo
-            else if (isPreparingData) {
-                isDownloadFailed = false
-                val isFirstRun = !cacheManager.hasCache()
-                
-                val result = updateManager.checkAndSync(
-                    currentLanguage = currentLanguage.value,
-                    isFirstRun = isFirstRun,
-                    onProgress = { progress, status ->
-                        downloadProgress = progress
-                        downloadStatus = status
-                    }
-                )
-
-                when (result) {
-                    is SyncResult.Success -> {
-                        globalRecipes = result.recipes
-                        isUpdateChecked = true 
-                        isPreparingData = false
-                    }
-                    is SyncResult.Error -> {
-                        startupErrorMessage = result.message
-                        if (isFirstRun) {
-                            currentLanguage.value = ""
-                            LanguageManager.setLanguage("")
-                        } else {
-                            globalRecipes = cacheManager.loadRecipes()
-                        }
-                        isUpdateChecked = true 
-                        isDownloadFailed = true
-                        isPreparingData = false
-                    }
-                }
+            else if (isPreparingDataState) {
+                val isFirstRun = !repository.hasCache()
+                mainViewModel.startSync(isFirstRun)
             }
         }
     }
 
-    // Persistir cambios automáticamente cada vez que la lista cambie
-    LaunchedEffect(favoritos.toList()) {
-        favoriteManager.saveFavorites(favoritos)
-    }
-
     Scaffold(
         bottomBar = { 
-            if (currentLanguage.value.isNotEmpty() && cacheManager.hasCache() && !isPreparingData && !isDownloadFailed) {
-                CustomBottomBar(navController, currentLanguage) 
+            if (currentLanguageState.isNotEmpty() && repository.hasCache() && !isPreparingDataState && !isDownloadFailedState) {
+                CustomBottomBar(navController, currentLanguageLocal) 
             }
         },
         containerColor = Background
     ) { paddingValues ->
         when {
-            currentLanguage.value.isEmpty() -> {
-                LanguageSelectionScreen(currentLanguage, startupErrorMessage) {
-                    startupErrorMessage = ""
-                    isPreparingData = true
+            currentLanguageState.isEmpty() -> {
+                LanguageSelectionScreen(currentLanguageLocal, startupErrorMessageState) {
+                    mainViewModel.setStartupErrorMessage("")
+                    mainViewModel.setPreparingData(true)
                 }
             }
-            !cacheManager.hasCache() || isPreparingData || isDownloadFailed -> {
+            !repository.hasCache() || isPreparingDataState || isDownloadFailedState -> {
                 LaunchedEffect(Unit) {
-                    if (!cacheManager.hasCache() && !isPreparingData && !isDownloadFailed) {
-                        isPreparingData = true
+                    if (!repository.hasCache() && !isPreparingDataState && !isDownloadFailedState) {
+                        mainViewModel.setPreparingData(true)
                     }
                 }
-                PreparingDataScreen(currentLanguage.value, downloadProgress, downloadStatus, isDownloadFailed, startupErrorMessage) {
-                    isDownloadFailed = false
-                    startupErrorMessage = ""
-                    isPreparingData = true
+                PreparingDataScreen(currentLanguageState, downloadProgressState, downloadStatusState, isDownloadFailedState, startupErrorMessageState) {
+                    mainViewModel.setDownloadFailed(false)
+                    mainViewModel.setStartupErrorMessage("")
+                    mainViewModel.setPreparingData(true)
                 }
             }
             else -> {
-                Contenido(paddingValues, navController, servicioRecipes, favoritos, tts, onSpeechFinished, currentLanguage, globalRecipes)
+                Contenido(paddingValues, navController, repository.servicioRecipes, favoritosLocal, tts, onSpeechFinished, currentLanguageLocal, globalRecipesState)
             }
         }
     }
@@ -289,10 +273,15 @@ fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableSt
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: "inicio"
     
-    // Determine selected index
-    val selectedIndex = when {
-        currentRoute == "nutriologo" -> 2
-        currentRoute.startsWith("recetas") || currentRoute == "recetas_lista" || currentRoute == "recetas_favoritos" -> 1
+    val currentTabRoot = when {
+        currentRoute == "nutriologo" -> "nutriologo"
+        currentRoute == "recetas" || currentRoute.startsWith("recetas") || currentRoute.startsWith("recipeDetail") || currentRoute.startsWith("cookingMode") || currentRoute == "supermercados" -> "recetas"
+        else -> "inicio"
+    }
+
+    val selectedIndex = when (currentTabRoot) {
+        "nutriologo" -> 2
+        "recetas" -> 1
         else -> 0
     }
 
@@ -300,19 +289,20 @@ fun CustomBottomBar(navController: NavHostController, currentLanguage: MutableSt
     var lastClickTime by remember { mutableStateOf(0L) }
     val safeNavigate = { targetRoute: String ->
         val currentTime = System.currentTimeMillis()
-        // Check 1: Do not navigate if we are already on the target screen
-        // Check 2: Block rapid multiple clicks (throttle at 600ms)
-        if (currentRoute != targetRoute && currentTime - lastClickTime > 600) {
+        if (currentTime - lastClickTime > 300) {
             lastClickTime = currentTime
-            navController.navigate(targetRoute) {
-                // Return to home start destination to avoid massive backstack accumulation
-                popUpTo(navController.graph.startDestinationId) {
-                    saveState = true
+            if (currentTabRoot == targetRoute) {
+                // Si ya estamos en el flujo de la pestaña destino, hacer pop hasta la raíz para limpiar pantallas hijas
+                navController.popBackStack(targetRoute, inclusive = false)
+            } else {
+                // Si cambiamos de pestaña, ir al destino raíz y no restaurar estado de sub-pantallas para ir siempre al inicio
+                navController.navigate(targetRoute) {
+                    popUpTo(navController.graph.startDestinationId) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = false
                 }
-                // Avoid multiple copies of the same screen at the top of the stack
-                launchSingleTop = true
-                // Restore state (e.g. scroll position) when returning to this tab
-                restoreState = true
             }
         }
     }
@@ -493,20 +483,20 @@ fun Contenido(
             navController = navController,
             startDestination = "inicio",
             enterTransition = {
-                fadeIn(animationSpec = tween(500)) + 
-                scaleIn(initialScale = 0.8f, animationSpec = tween(500))
+                fadeIn(animationSpec = tween(300)) + 
+                scaleIn(initialScale = 0.94f, animationSpec = tween(300))
             },
             exitTransition = {
-                fadeOut(animationSpec = tween(500)) + 
-                scaleOut(targetScale = 1.1f, animationSpec = tween(500))
+                fadeOut(animationSpec = tween(300)) + 
+                scaleOut(targetScale = 1.06f, animationSpec = tween(300))
             },
             popEnterTransition = {
-                fadeIn(animationSpec = tween(500)) + 
-                scaleIn(initialScale = 1.1f, animationSpec = tween(500))
+                fadeIn(animationSpec = tween(300)) + 
+                scaleIn(initialScale = 1.06f, animationSpec = tween(300))
             },
             popExitTransition = {
-                fadeOut(animationSpec = tween(500)) + 
-                scaleOut(targetScale = 0.8f, animationSpec = tween(500))
+                fadeOut(animationSpec = tween(300)) + 
+                scaleOut(targetScale = 0.94f, animationSpec = tween(300))
             }
         ) {
             composable("inicio") { 
