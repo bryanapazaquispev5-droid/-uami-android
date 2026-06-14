@@ -583,6 +583,10 @@ fun Contenido(
                     favoriteIds = favoritos,
                     onNavigateToRecipe = { recipeId ->
                         navController.navigate("recipeDetail/$recipeId")
+                    },
+                    reviewsViewModel = reviewsViewModel,
+                    onNavigateToProfile = {
+                        navController.navigate("perfil")
                     }
                 )
             }
@@ -619,8 +623,24 @@ fun ScreenInicio(
 ) {
     val reviewsViewModel: ReviewsViewModel = viewModel(factory = factory)
     val userProfile by reviewsViewModel.userProfile.collectAsState()
+    val currentUser by reviewsViewModel.currentUser.collectAsState()
     val isEs = currentLanguage.value == "es"
     val scrollState = rememberScrollState()
+
+    var showRecommendationDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentUser) {
+        if (currentUser == null) {
+            if (LanguageManager.isFirstRun()) {
+                LanguageManager.setFirstRunCompleted()
+                reviewsViewModel.hasShownLoginPrompt = true
+                navController.navigate("perfil")
+            } else if (!reviewsViewModel.hasShownLoginPrompt) {
+                showRecommendationDialog = true
+                reviewsViewModel.hasShownLoginPrompt = true
+            }
+        }
+    }
 
     // 1. Saludo por hora del día
     val greeting = remember {
@@ -900,10 +920,15 @@ fun ScreenInicio(
                             HeartBurstButton(
                                 isFav = isFav,
                                 onFavToggle = {
-                                    if (isFav) {
-                                        recetaDelDia.id?.let { favoritos.remove(it) }
+                                    if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                        android.widget.Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", android.widget.Toast.LENGTH_SHORT).show()
+                                        navController.navigate("perfil")
                                     } else {
-                                        favoritos.add(recetaDelDia.id ?: 0)
+                                        if (isFav) {
+                                            recetaDelDia.id?.let { favoritos.remove(it) }
+                                        } else {
+                                            favoritos.add(recetaDelDia.id ?: 0)
+                                        }
                                     }
                                 },
                                 modifier = Modifier.size(36.dp),
@@ -1174,10 +1199,15 @@ fun ScreenInicio(
                         recipe = recipe,
                         isFav = favoritos.contains(recipe.id),
                         onFavToggle = {
-                            if (favoritos.contains(recipe.id)) {
-                                recipe.id?.let { favoritos.remove(it) }
+                            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                android.widget.Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", android.widget.Toast.LENGTH_SHORT).show()
+                                navController.navigate("perfil")
                             } else {
-                                favoritos.add(recipe.id ?: 0)
+                                if (favoritos.contains(recipe.id)) {
+                                    recipe.id?.let { favoritos.remove(it) }
+                                } else {
+                                    favoritos.add(recipe.id ?: 0)
+                                }
                             }
                         },
                         currentLanguage = currentLanguage.value,
@@ -1222,6 +1252,101 @@ fun ScreenInicio(
         }
 
         Spacer(Modifier.height(100.dp)) // Padding for bottom bar
+    }
+
+    if (showRecommendationDialog) {
+        AlertDialog(
+            onDismissRequest = { showRecommendationDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Restaurant,
+                        contentDescription = null,
+                        tint = Primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = if (isEs) "¡Únete a la Cocina Uami! 🍳" else "Join Uami Kitchen! 🍳",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black)
+                    )
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        text = if (isEs) {
+                            "Te recomendamos iniciar sesión o registrarte como Chef para poder:"
+                        } else {
+                            "We recommend signing in or registering as a Chef to:"
+                        },
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                        color = OnBackground
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    val bullets = if (isEs) {
+                        listOf(
+                            "☁️ Sincronizar tus favoritos en la nube en tiempo real.",
+                            "💬 Escribir opiniones y puntuar tus recetas preferidas.",
+                            "❤️ Dar 'Me Gusta' a las opiniones de otros chefs.",
+                            "🧑‍🍳 Personalizar tu nombre y foto de perfil."
+                        )
+                    } else {
+                        listOf(
+                            "☁️ Sync your favorites in the cloud in real-time.",
+                            "💬 Leave reviews and rate your favorite recipes.",
+                            "❤️ React and 'Like' comments from other chefs.",
+                            "🧑‍🍳 Customize your name and profile picture."
+                        )
+                    }
+                    bullets.forEach { bullet ->
+                        Row(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = bullet,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextMuted
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                BouncyPressEffect { modifier, interactionSource ->
+                    Button(
+                        onClick = {
+                            showRecommendationDialog = false
+                            navController.navigate("perfil")
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = modifier.clickable(interactionSource = interactionSource, indication = null) {}
+                    ) {
+                        Text(
+                            text = if (isEs) "Registrarse / Iniciar Sesión" else "Register / Sign In",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showRecommendationDialog = false }
+                ) {
+                    Text(
+                        text = if (isEs) "Continuar como Invitado" else "Continue as Guest",
+                        color = TextMuted,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = Surface,
+            tonalElevation = 8.dp
+        )
     }
 }
 

@@ -43,6 +43,7 @@ import androidx.activity.ComponentActivity
 import com.example.uami.recipes.data.RecipeRepository
 import com.example.uami.recipes.viewmodel.NutritionistViewModel
 import com.example.uami.recipes.viewmodel.ViewModelFactory
+import com.example.uami.recipes.viewmodel.ReviewsViewModel
 import com.example.uami.findActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,10 +52,13 @@ fun ScreenNutritionist(
     currentLanguage: MutableState<String>,
     allRecipes: List<RecipeModel>,
     favoriteIds: List<Int>,
-    onNavigateToRecipe: (Int) -> Unit
+    onNavigateToRecipe: (Int) -> Unit,
+    reviewsViewModel: ReviewsViewModel,
+    onNavigateToProfile: () -> Unit
 ) {
     val context = LocalContext.current
     val isEs = currentLanguage.value == "es"
+    val currentUser by reviewsViewModel.currentUser.collectAsState()
 
     // Obtener el ViewModel de la IA de nutrición
     val activity = remember(context) { context.findActivity()!! }
@@ -70,45 +74,131 @@ fun ScreenNutritionist(
     val isInitializing by nutritionistViewModel.isInitializing.collectAsState()
     val downloadProgress by nutritionistViewModel.downloadProgress.collectAsState()
 
-    // Cargar plan guardado en primer renderizado
-    LaunchedEffect(allRecipes) {
-        if (allRecipes.isNotEmpty()) {
+    // Cargar plan guardado en primer renderizado si el usuario está logueado
+    LaunchedEffect(allRecipes, currentUser) {
+        if (currentUser != null && allRecipes.isNotEmpty()) {
             nutritionistViewModel.loadSavedPlan(allRecipes)
         }
     }
 
-    Scaffold(
-        topBar = {
-            Column(modifier = Modifier.background(Background).statusBarsPadding().padding(top = 16.dp, bottom = 8.dp)) {
-                Text(
-                    text = if (isEs) "Plan Semanal IA" else "AI Weekly Plan",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
-                    color = OnBackground,
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
-                Text(
-                    text = if (isEs) "Planificación nutricional 100% Local con IA" else "100% Offline meal planning with AI",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextMuted,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
-                )
+    if (currentUser == null) {
+        Scaffold(
+            topBar = {
+                Column(modifier = Modifier.background(Background).statusBarsPadding().padding(top = 16.dp, bottom = 8.dp)) {
+                    Text(
+                        text = if (isEs) "Plan Semanal IA" else "AI Weekly Plan",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                        color = OnBackground,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                }
+            },
+            containerColor = Background
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Surface,
+                    border = BorderStroke(1.dp, Primary.copy(alpha = 0.15f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Lock,
+                            contentDescription = "Lock",
+                            tint = Primary,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .pulseAnimation(durationMillis = 2000)
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = if (isEs) "Función Exclusiva para Chefs ⭐" else "Exclusive Feature for Chefs ⭐",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                            color = OnBackground,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = if (isEs) {
+                                "Para poder generar un plan nutricional semanal personalizado con IA, necesitas estar registrado e iniciar sesión."
+                            } else {
+                                "To generate a customized weekly meal plan using AI, you need to be registered and signed in."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextMuted,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(24.dp))
+
+                        BouncyPressEffect { modifier, interactionSource ->
+                            Button(
+                                onClick = onNavigateToProfile,
+                                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = modifier
+                                    .fillMaxWidth()
+                                    .clickable(interactionSource = interactionSource, indication = null) {},
+                                contentPadding = PaddingValues(vertical = 14.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Rounded.Login, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isEs) "Iniciar Sesión / Registrarse" else "Sign In / Register",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
-        },
-        containerColor = Background
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            DietPlanTab(
-                isEs = isEs,
-                dietPlan = dietPlan,
-                onGeneratePlan = {
-                    nutritionistViewModel.generateDietPlan(allRecipes, favoriteIds, isEs)
-                },
-                onNavigateToRecipe = onNavigateToRecipe
-            )
+        }
+    } else {
+        Scaffold(
+            topBar = {
+                Column(modifier = Modifier.background(Background).statusBarsPadding().padding(top = 16.dp, bottom = 8.dp)) {
+                    Text(
+                        text = if (isEs) "Plan Semanal IA" else "AI Weekly Plan",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                        color = OnBackground,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                    Text(
+                        text = if (isEs) "Planificación nutricional 100% Local con IA" else "100% Offline meal planning with AI",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextMuted,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                    )
+                }
+            },
+            containerColor = Background
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                DietPlanTab(
+                    isEs = isEs,
+                    dietPlan = dietPlan,
+                    onGeneratePlan = {
+                        nutritionistViewModel.generateDietPlan(allRecipes, favoriteIds, isEs)
+                    },
+                    onNavigateToRecipe = onNavigateToRecipe
+                )
             
             if (isGenerating) {
                 Box(
@@ -195,6 +285,7 @@ fun ScreenNutritionist(
             }
         }
     }
+}
 }
 
 // Estructura auxiliar para guardar caché del plan

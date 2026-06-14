@@ -385,10 +385,15 @@ fun ScreenRecipes(
                                     recipe = recipe,
                                     isFav = favoritos.contains(recipe.id),
                                     onFavToggle = {
-                                        if (favoritos.contains(recipe.id)) {
-                                            recipe.id?.let { favoritos.remove(it) }
+                                        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                            android.widget.Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", android.widget.Toast.LENGTH_SHORT).show()
+                                            navController.navigate("perfil")
                                         } else {
-                                            favoritos.add(recipe.id ?: 0)
+                                            if (favoritos.contains(recipe.id)) {
+                                                recipe.id?.let { favoritos.remove(it) }
+                                            } else {
+                                                favoritos.add(recipe.id ?: 0)
+                                            }
                                         }
                                     },
                                     currentLanguage = currentLanguage,
@@ -421,10 +426,15 @@ fun ScreenRecipes(
                                     recipe = recipe,
                                     isFav = favoritos.contains(recipe.id),
                                     onFavToggle = {
-                                        if (favoritos.contains(recipe.id)) {
-                                            recipe.id?.let { favoritos.remove(it) }
+                                        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                            android.widget.Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", android.widget.Toast.LENGTH_SHORT).show()
+                                            navController.navigate("perfil")
                                         } else {
-                                            favoritos.add(recipe.id ?: 0)
+                                            if (favoritos.contains(recipe.id)) {
+                                                recipe.id?.let { favoritos.remove(it) }
+                                            } else {
+                                                favoritos.add(recipe.id ?: 0)
+                                            }
                                         }
                                     },
                                     currentLanguage = currentLanguage,
@@ -692,6 +702,7 @@ fun RecipeCardPremium(recipe: RecipeModel, isFav: Boolean, onFavToggle: () -> Un
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScreenRecipeDetail(navController: NavHostController, @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, id: Int, favoritos: MutableList<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
+    val context = LocalContext.current
     val isEs = currentLanguage.value == "es"
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -753,8 +764,13 @@ fun ScreenRecipeDetail(navController: NavHostController, @Suppress("UNUSED_PARAM
                     HeartBurstButton(
                         isFav = isFav,
                         onFavToggle = {
-                            if (isFav) favoritos.remove(recipe?.id)
-                            else favoritos.add(recipe?.id ?: 0)
+                            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                android.widget.Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", android.widget.Toast.LENGTH_SHORT).show()
+                                navController.navigate("perfil")
+                            } else {
+                                if (isFav) favoritos.remove(recipe?.id)
+                                else favoritos.add(recipe?.id ?: 0)
+                            }
                         },
                         modifier = Modifier.size(40.dp),
                         iconSize = 22.dp,
@@ -961,6 +977,115 @@ fun ScreenCookingMode(
     currentLanguage: MutableState<String>,
     preloadedRecipes: List<RecipeModel>
 ) {
+    val isEs = currentLanguage.value == "es"
+    val currentUser = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser }
+
+    if (currentUser == null) {
+        Scaffold(
+            topBar = {
+                Column(modifier = Modifier.background(Background).statusBarsPadding().padding(top = 16.dp, bottom = 8.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    ) {
+                        BouncyPressEffect(squishFactor = 0.72f) { modifier, interactionSource ->
+                            IconButton(
+                                onClick = { navController.popBackStack() },
+                                interactionSource = interactionSource,
+                                modifier = modifier
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = null,
+                                    tint = OnBackground
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (isEs) "Modo Cocina" else "Cooking Mode",
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                            color = OnBackground
+                        )
+                    }
+                }
+            },
+            containerColor = Background
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Surface,
+                    border = BorderStroke(1.dp, Primary.copy(alpha = 0.15f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Lock,
+                            contentDescription = "Lock",
+                            tint = Primary,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .pulseAnimation(durationMillis = 2000)
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = if (isEs) "Función Exclusiva para Chefs ⭐" else "Exclusive Feature for Chefs ⭐",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                            color = OnBackground,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = if (isEs) {
+                                "Para acceder al modo cocina paso a paso con asistente de voz, necesitas estar registrado e iniciar sesión."
+                            } else {
+                                "To access step-by-step cooking mode with a voice assistant, you need to be registered and signed in."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextMuted,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(Modifier.height(24.dp))
+
+                        BouncyPressEffect { modifier, interactionSource ->
+                            Button(
+                                onClick = { navController.navigate("perfil") },
+                                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = modifier
+                                    .fillMaxWidth()
+                                    .clickable(interactionSource = interactionSource, indication = null) {},
+                                contentPadding = PaddingValues(vertical = 14.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Rounded.Login, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isEs) "Iniciar Sesión / Registrarse" else "Sign In / Register",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
+
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 

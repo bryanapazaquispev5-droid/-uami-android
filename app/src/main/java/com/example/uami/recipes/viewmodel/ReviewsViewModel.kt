@@ -48,6 +48,8 @@ class ReviewsViewModel(private val repository: RecipeRepository) : ViewModel() {
     private val _isPosting = MutableStateFlow(false)
     val isPosting: StateFlow<Boolean> = _isPosting.asStateFlow()
 
+    var hasShownLoginPrompt = false
+
     init {
         // Escuchar cambios de autenticación
         auth.addAuthStateListener { firebaseAuth ->
