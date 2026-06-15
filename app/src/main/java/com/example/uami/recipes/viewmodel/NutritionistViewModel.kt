@@ -8,6 +8,7 @@ import com.example.uami.recipes.models.RecipeModel
 import com.example.uami.recipes.ui.SavedDayPlanIds
 import com.example.uami.utils.DietDayPlan
 import com.example.uami.utils.NutritionistAIManager
+import com.google.firebase.auth.FirebaseAuth
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,8 +32,14 @@ class NutritionistViewModel(
 
     private val sharedPrefs = repository.context.getSharedPreferences("nutritionist_prefs", Context.MODE_PRIVATE)
 
+    private fun getPlanKey(): String {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        return if (uid != null) "saved_diet_plan_$uid" else "saved_diet_plan_anonymous"
+    }
+
     fun loadSavedPlan(allRecipes: List<RecipeModel>) {
-        val savedPlanJson = sharedPrefs.getString("saved_diet_plan", null)
+        val key = getPlanKey()
+        val savedPlanJson = sharedPrefs.getString(key, null)
         if (savedPlanJson != null) {
             try {
                 val gson = Gson()
@@ -49,7 +56,10 @@ class NutritionistViewModel(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                _dietPlan.value = emptyList()
             }
+        } else {
+            _dietPlan.value = emptyList()
         }
         
         // Inicializar el modelo LLM en background
@@ -73,7 +83,7 @@ class NutritionistViewModel(
             val savedIds = newPlan.map {
                 SavedDayPlanIds(it.dayName, it.breakfast.id ?: 0, it.lunch.id ?: 0, it.dinner.id ?: 0)
             }
-            sharedPrefs.edit().putString("saved_diet_plan", Gson().toJson(savedIds)).apply()
+            sharedPrefs.edit().putString(getPlanKey(), Gson().toJson(savedIds)).apply()
             _isGenerating.value = false
         }
     }
