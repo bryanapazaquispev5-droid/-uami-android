@@ -13,6 +13,7 @@
 *   **Explorador de Supermercados (Google Maps):** Mapa interactivo de supermercados y mercados tradicionales en Arequipa con estilo oscuro personalizado para buscar los ingredientes, y enlace a navegación con Google Maps.
 *   **Notificaciones Push Inteligentes (FCM):** Canal de notificaciones remotas mediante Firebase Cloud Messaging para alertas de recetas del día, sugerencias personalizadas de nutrición y tips de salud interactivos.
 *   **Opiniones de la Comunidad y Reacciones (Firestore):** Módulo para publicar reseñas con calificación por estrellas y comentarios en tiempo real. Cuenta con un dashboard de calificación animado, un halo sweep-gradient rotatorio para destacar avatares con calificaciones de 5 estrellas, y soporte de reacciones ("Me Gusta") en tiempo real con físicas de rebote elástico.
+*   **Base de Datos Local (Room):** Persistencia local de recetas y traducción de textos mediante Room Database. Implementa transacciones de base de datos seguras, flujos de datos reactivos con Flow y corrutinas.
 *   **Sincronización en la Nube de Favoritos**: Sistema híbrido (local y remoto) que sincroniza en tiempo real los favoritos del chef con Firebase Firestore. Si el usuario inicia sesión por primera vez, realiza una fusión inteligente (unión) de sus favoritos de invitado con la nube para evitar pérdida de datos.
 *   **Avatares Personalizados y Perfil de Chef**: Registro e inicio de sesión integrados donde el chef puede elegir un avatar preestablecido o subir su propia foto de perfil de galería (comprimida y convertida a Base64 en memoria de forma optimizada para caber en Firestore), actualizando su identidad al instante en todas las pantallas.
 *   **Diseño Premium y Fluido:** Interfaz oscura con gradientes metálicos y glassmorphic, efectos de deformación elástica (bouncy click), animaciones Lottie, transiciones de tarjetas de perfil y confeti dinámico para marcar favoritos.
@@ -28,6 +29,7 @@
 *   **Animaciones:** Lottie Compose + confeti vectorial personalizado en Canvas
 *   **Servicios de Mapas:** Google Maps SDK para Android + Jetpack Compose Maps wrapper
 *   **Navegación:** Jetpack Navigation Compose
+*   **Base de Datos Local (Room):** Room 2.8.4 (con TypeConverters basados en Gson) para almacenamiento local de recetas y traducciones de ML Kit.
 *   **Servicios en la Nube / Firebase:**
     *   **Firebase Cloud Messaging (FCM v1)** (Notificaciones Push remotas)
     *   **Firebase Authentication** (Registro e inicio de sesión de Chefs de Uami)
@@ -48,6 +50,16 @@ El asistente lee el perfil físico y los objetivos del usuario (pérdida de peso
 ### 2. Traducción en Dispositivo (ML Kit)
 Las recetas obtenidas de la API externa se traducen automáticamente al español término a término y se almacenan en un caché local para acelerar futuras cargas sin consumir ancho de banda.
 *   **Ruta de Inferencia:** `com.google.mlkit.nl.translate.Translator`
+
+---
+
+## 💾 Persistencia de Datos y APIs REST
+
+La aplicación implementa la persistencia de datos cumpliendo con arquitectura limpia (MVVM) y el **Repository Pattern**:
+*   **Room Database**: Gestiona localmente las entidades `RecipeEntity` (recetas en caché) y `TranslationEntity` (traducciones localizadas en dispositivo) a través de `RecipeDao` y `TranslationDao`.
+*   **Coroutines y Flow**: Todas las operaciones asíncronas de la base de datos se ejecutan en hilos en segundo plano (`Dispatchers.IO`) utilizando `StateFlow` y `Flow` para actualizaciones en tiempo real a la interfaz de usuario de Jetpack Compose.
+*   **Sincronización Inteligente sin Caídas**: Si hay un fallo de red o se pierde la conexión, `UpdateManager` maneja correctamente el error de red y recupera de forma transparente los datos desde la base de datos local de Room sin interrumpir la experiencia de usuario.
+*   **Aislamiento de Cuentas (UID)**: Los favoritos y planes de alimentación se almacenan de manera independiente en el dispositivo utilizando claves dinámicas basadas en el UID del usuario registrado actual de Firebase Auth para evitar mezcla de datos.
 
 ---
 
