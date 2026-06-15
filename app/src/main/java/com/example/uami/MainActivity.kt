@@ -222,12 +222,17 @@ fun UamiApp(tts: TextToSpeech?) {
         }
     }
 
-    // Sync favorites list with ViewModel state (View-only observation)
+    // Sync favorites list with ViewModel state (Two-way observation)
     val favoritosLocal = remember { mutableStateListOf<Int>() }
     LaunchedEffect(favoritosState) {
         if (favoritosLocal.toList() != favoritosState) {
             favoritosLocal.clear()
             favoritosLocal.addAll(favoritosState)
+        }
+    }
+    LaunchedEffect(favoritosLocal.toList()) {
+        if (favoritosLocal.toList() != favoritosState) {
+            mainViewModel.setFavorites(favoritosLocal.toList())
         }
     }
 

@@ -9,6 +9,7 @@ import com.example.uami.sync.SyncResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.google.firebase.auth.FirebaseAuth
 import okhttp3.OkHttpClient
 
 class RecipeRepository(val context: Context) {
@@ -17,6 +18,12 @@ class RecipeRepository(val context: Context) {
 
     private val _favoritos = MutableStateFlow<List<Int>>(favoriteManager.loadFavorites())
     val favoritos: StateFlow<List<Int>> = _favoritos.asStateFlow()
+
+    init {
+        FirebaseAuth.getInstance().addAuthStateListener {
+            _favoritos.value = favoriteManager.loadFavorites()
+        }
+    }
 
     private val okHttpClient = OkHttpClient.Builder().addInterceptor { chain ->
         val request = chain.request().newBuilder()
