@@ -2,13 +2,12 @@ package com.example.uami.utils
 
 import android.content.Context
 import com.example.uami.recipes.models.RecipeModel
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import java.io.File
+import com.example.uami.database.UamiDatabase
+import com.example.uami.database.RecipeEntity
 
 class RecipeCacheManager(context: Context) {
-    private val gson = Gson()
-    private val cacheFile = File(context.filesDir, "recipes_cache.json")
+    private val database = UamiDatabase.getDatabase(context)
+    private val recipeDao = database.recipeDao()
     private val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
 
     fun saveApiHash(hash: Int) {
@@ -19,43 +18,20 @@ class RecipeCacheManager(context: Context) {
         return prefs.getInt("api_hash", 0)
     }
 
-    fun saveRecipes(recipes: List<RecipeModel>) {
-        try {
-            val json = gson.toJson(recipes)
-            cacheFile.writeText(json)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+    suspend fun saveRecipes(recipes: List<RecipeModel>) {
+        val entities = recipes.map { RecipeEntity.fromModel(it) }
+        recipeDao.updateRecipes(entities)
     }
 
-    fun loadRecipes(): List<RecipeModel> {
-        return try {
-            if (cacheFile.exists()) {
-                val json = cacheFile.readText()
-                val type = object : TypeToken<List<RecipeModel>>() {}.type
-                gson.fromJson(json, type)
-            } else {
-                emptyList()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
-        }
+    suspend fun loadRecipes(): List<RecipeModel> {
+        return recipeDao.getAllRecipes().map { it.toModel() }
     }
 
-    fun hasCache(): Boolean {
-        if (!cacheFile.exists()) return false
-        try {
-            val content = cacheFile.readText().trim()
-            return content.isNotEmpty() && content != "[]" && content != "{}"
-        } catch (e: Exception) {
-            return false
-        }
+    suspend fun hasCache(): Boolean {
+        return recipeDao.getAllRecipes().isNotEmpty()
     }
     
-    fun clearCache() {
-        if (cacheFile.exists()) {
-            cacheFile.delete()
-        }
+    suspend fun clearCache() {
+        recipeDao.clearAll()
     }
 }

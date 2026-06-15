@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.uami.recipes.models.RecipeModel
-import com.example.uami.recipes.remote.RecipeApiService
+
 import com.example.uami.ui.theme.*
 import com.example.uami.utils.*
 import com.example.uami.ui.filters.*
@@ -189,8 +189,7 @@ fun MenuActionCard(title: String, subtitle: String, icon: ImageVector, onClick: 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScreenRecipes(
-    navController: NavHostController, 
-    @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, 
+    navController: NavHostController,
     favoritos: MutableList<Int>, 
     currentLanguage: MutableState<String>,
     preloadedRecipes: List<RecipeModel> = emptyList(),
@@ -712,7 +711,7 @@ fun RecipeCardPremium(recipe: RecipeModel, isFav: Boolean, onFavToggle: () -> Un
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScreenRecipeDetail(navController: NavHostController, @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, id: Int, favoritos: MutableList<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
+fun ScreenRecipeDetail(navController: NavHostController, id: Int, favoritos: MutableList<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
     val context = LocalContext.current
     val isEs = currentLanguage.value == "es"
     var recipe by remember { mutableStateOf<RecipeModel?>(null) }
@@ -981,8 +980,7 @@ fun ScreenRecipeDetail(navController: NavHostController, @Suppress("UNUSED_PARAM
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ScreenCookingMode(
-    navController: NavHostController, 
-    @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, 
+    navController: NavHostController,
     id: Int,
     tts: TextToSpeech?,
     @Suppress("UNUSED_PARAMETER") onSpeechFinished: MutableState<(() -> Unit)?>,
@@ -1776,7 +1774,7 @@ fun CookingStep(number: Int, text: String, isEs: Boolean) {
 }
 
 @Composable
-fun ScreenFavorites(navController: NavHostController, @Suppress("UNUSED_PARAMETER") servicio: RecipeApiService, favoritos: List<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
+fun ScreenFavorites(navController: NavHostController, favoritos: List<Int>, currentLanguage: MutableState<String>, preloadedRecipes: List<RecipeModel>) {
     val isEs = currentLanguage.value == "es"
     var listaFavoritos by remember { mutableStateOf<List<RecipeModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }

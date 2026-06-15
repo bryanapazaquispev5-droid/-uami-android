@@ -39,6 +39,9 @@ class MainViewModel(private val repository: RecipeRepository) : ViewModel() {
     private val _favoritos = MutableStateFlow<List<Int>>(emptyList())
     val favoritos: StateFlow<List<Int>> = _favoritos.asStateFlow()
 
+    private val _hasLocalCache = MutableStateFlow(false)
+    val hasLocalCache: StateFlow<Boolean> = _hasLocalCache.asStateFlow()
+
     init {
         // Cargar favoritos reactivamente desde el repositorio
         viewModelScope.launch {
@@ -48,8 +51,12 @@ class MainViewModel(private val repository: RecipeRepository) : ViewModel() {
         }
         
         // Si hay cache local, cargarlo inmediatamente para permitir inicio rápido offline
-        if (repository.hasCache()) {
-            _globalRecipes.value = repository.loadRecipesFromCache()
+        viewModelScope.launch {
+            val exists = repository.hasCache()
+            _hasLocalCache.value = exists
+            if (exists) {
+                _globalRecipes.value = repository.loadRecipesFromCache()
+            }
         }
     }
 
@@ -75,6 +82,7 @@ class MainViewModel(private val repository: RecipeRepository) : ViewModel() {
             when (result) {
                 is SyncResult.Success -> {
                     _globalRecipes.value = result.recipes
+                    _hasLocalCache.value = true
                     _isUpdateChecked.value = true
                     _isPreparingData.value = false
                 }

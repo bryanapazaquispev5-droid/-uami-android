@@ -3,7 +3,6 @@ package com.example.uami.sync
 import android.content.Context
 import android.util.Log
 import com.example.uami.recipes.models.RecipeModel
-import com.example.uami.recipes.remote.RecipeApiService
 import com.example.uami.isInternetAvailable
 import com.example.uami.utils.RecipeCacheManager
 import com.example.uami.utils.translateRecipesListAsync
@@ -13,10 +12,11 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 
 class UpdateManager(
     private val context: Context,
-    private val apiService: RecipeApiService,
     private val cacheManager: RecipeCacheManager,
     private val okHttpClient: OkHttpClient
 ) {
@@ -33,20 +33,73 @@ class UpdateManager(
                 val msg = if (isEs) "No hay conexión a internet. Verifica tu red." else "No internet connection. Check your network."
                 return SyncResult.Error(msg)
             }
-            // Si hay caché y no hay internet, abrimos normal
             return SyncResult.Success(cacheManager.loadRecipes(), wasUpdated = false)
         }
 
         try {
             onProgress(0.1f, if (isEs) "Comprobando actualizaciones..." else "Checking for updates...")
-            
-            // 2. Descargar RAW de la API para comparar
-            val rawRecipes = apiService.getRecipes()
-            if (rawRecipes.isEmpty()) throw Exception("API_EMPTY")
 
-            // Generar Hash basado en los datos crudos (JSON/Contenido)
-            // Si cambian ingredientes, nombres o se agregan recetas, el hash cambia.
-            val currentHash = rawRecipes.hashCode()
+            // 2. Obtener recetas desde Firestore (fuente principal)
+            Log.d("UPDATE_MANAGER", "Recuperando recetas desde Firestore...")
+            val db = FirebaseFirestore.getInstance()
+            val firestoreRecipes = mutableListOf<RecipeModel>()
+
+            val snapshot = kotlinx.coroutines.withTimeoutOrNull(8000) {
+                db.collection("recipes").get().await()
+            }
+
+            if (snapshot != null) {
+                for (doc in snapshot.documents) {
+                    val id = doc.getLong("id")?.toInt()
+                    val name = doc.getString("name")
+                    val ingredients = doc.get("ingredients") as? List<String>
+                    val instructions = doc.get("instructions") as? List<String>
+                    val prepTimeMinutes = doc.getLong("prepTimeMinutes")?.toInt()
+                    val cookTimeMinutes = doc.getLong("cookTimeMinutes")?.toInt()
+                    val difficulty = doc.getString("difficulty")
+                    val cuisine = doc.getString("cuisine")
+                    val mealType = doc.getString("mealType")
+                    val image = doc.getString("image")
+                    val rating = doc.getDouble("rating")
+                    val difficultyEn = doc.getString("difficultyEn")
+                    val cuisineEn = doc.getString("cuisineEn")
+                    val mealTypeEn = doc.getString("mealTypeEn")
+
+                    if (id != null) {
+                        firestoreRecipes.add(
+                            RecipeModel(
+                                id = id,
+                                name = name,
+                                ingredients = ingredients,
+                                instructions = instructions,
+                                prepTimeMinutes = prepTimeMinutes,
+                                cookTimeMinutes = cookTimeMinutes,
+                                difficulty = difficulty,
+                                cuisine = cuisine,
+                                mealType = mealType,
+                                image = image,
+                                rating = rating,
+                                difficultyEn = difficultyEn,
+                                cuisineEn = cuisineEn,
+                                mealTypeEn = mealTypeEn
+                            )
+                        )
+                    }
+                }
+                Log.d("UPDATE_MANAGER", "Recuperadas ${firestoreRecipes.size} recetas desde Firestore.")
+            } else {
+                Log.w("UPDATE_MANAGER", "Timeout al leer Firestore.")
+            }
+
+            if (firestoreRecipes.isEmpty()) {
+                if (cacheManager.hasCache()) {
+                    return SyncResult.Success(cacheManager.loadRecipes(), wasUpdated = false)
+                }
+                throw Exception("FIRESTORE_EMPTY")
+            }
+
+            // Generar Hash para detectar cambios
+            val currentHash = firestoreRecipes.hashCode()
 
             // Si no es el primer arranque y el hash es igual, NO HAY CAMBIOS
             if (!isFirstRun && cacheManager.hasCache() && cacheManager.getApiHash() == currentHash) {
@@ -54,17 +107,17 @@ class UpdateManager(
                 return SyncResult.Success(cacheManager.loadRecipes(), wasUpdated = false)
             }
 
-            Log.d("UPDATE_MANAGER", "Cambios detectados o primer arranque. Iniciando sincronización...")
+            Log.d("UPDATE_MANAGER", "Cambios detectados o primer arranque. Sincronizando...")
             onProgress(0.2f, if (isEs) "Traduciendo recetas..." else "Translating recipes...")
 
             // 3. Traducción IA
             var processedRecipes = if (isEs) {
-                translateRecipesListAsync(rawRecipes, "es")
+                translateRecipesListAsync(firestoreRecipes, "es")
             } else {
-                rawRecipes
+                firestoreRecipes
             }
 
-            // 4. Descargar Imágenes
+            // 4. Descargar Imágenes (ahora desde Google Drive)
             val total = processedRecipes.size
             processedRecipes = processedRecipes.mapIndexed { index, recipe ->
                 if (!isInternetAvailable(context)) throw Exception("INTERNET_LOST")
@@ -81,7 +134,10 @@ class UpdateManager(
                     } else {
                         try {
                             withContext(Dispatchers.IO) {
-                                val request = Request.Builder().url(recipe.image).build()
+                                val request = Request.Builder()
+                                    .url(recipe.image)
+                                    .header("User-Agent", "Mozilla/5.0")
+                                    .build()
                                 val response = okHttpClient.newCall(request).execute()
                                 if (response.isSuccessful) {
                                     val bytes = response.body?.bytes()
@@ -92,7 +148,8 @@ class UpdateManager(
                                 }
                             }
                         } catch (e: Exception) {
-                            throw Exception("INTERNET_LOST")
+                            Log.w("UPDATE_MANAGER", "Error descargando imagen ${recipe.id}: ${e.message}")
+                            // No lanzar excepción, seguir con la siguiente imagen
                         }
                     }
                 }
@@ -101,7 +158,7 @@ class UpdateManager(
 
             onProgress(0.95f, if (isEs) "Guardando base de datos..." else "Saving database...")
 
-            // 5. Guardar en Caché y actualizar Hash
+            // 5. Guardar en Caché
             if (processedRecipes.isNotEmpty()) {
                 cacheManager.saveRecipes(processedRecipes)
                 cacheManager.saveApiHash(currentHash)
@@ -114,11 +171,10 @@ class UpdateManager(
 
         } catch (e: Exception) {
             Log.e("UPDATE_MANAGER", "Error: ${e.message}")
-            if (e.message == "INTERNET_LOST" || !cacheManager.hasCache()) {
-                val msg = if (isEs) "Conexión interrumpida o API inalcanzable. No se pudo terminar la descarga." else "Connection interrupted or API unreachable. Download failed."
+            if (e.message == "INTERNET_LOST" || e.message == "FIRESTORE_EMPTY" || !cacheManager.hasCache()) {
+                val msg = if (isEs) "Error al conectar con la base de datos. Verifica tu conexión." else "Database connection error. Check your connection."
                 return SyncResult.Error(msg)
             } else {
-                // Si falla pero hay caché viejo, iniciamos con el caché viejo (ignorar update)
                 return SyncResult.Success(cacheManager.loadRecipes(), wasUpdated = false)
             }
         }

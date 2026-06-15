@@ -1,14 +1,15 @@
 package com.example.uami.utils
 
 import android.content.Context
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.example.uami.database.UamiDatabase
+import com.example.uami.database.TranslationEntity
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
-import java.io.File
+import kotlinx.coroutines.withContext
 
 object OnDeviceTranslator {
     private val options = TranslatorOptions.Builder()
@@ -20,54 +21,44 @@ object OnDeviceTranslator {
     private var isModelDownloaded = false
     
     private val memoryCache = mutableMapOf<String, String>()
-    private val gson = Gson()
-    private var cacheFile: File? = null
+    private var database: UamiDatabase? = null
 
     fun init(context: Context) {
-        // Inicializar archivo de caché manual (Bypass de Room)
-        cacheFile = File(context.filesDir, "translations_cache.json")
-        loadCacheFromFile()
+        database = UamiDatabase.getDatabase(context)
     }
 
-    private fun loadCacheFromFile() {
-        try {
-            if (cacheFile?.exists() == true) {
-                val json = cacheFile?.readText()
-                val type = object : TypeToken<Map<String, String>>() {}.type
-                val savedMap: Map<String, String> = gson.fromJson(json, type)
-                memoryCache.putAll(savedMap)
+    suspend fun translate(text: String?): String = withContext(Dispatchers.IO) {
+        if (text.isNullOrBlank()) return@withContext ""
+        
+        // 1. Check memory cache
+        synchronized(memoryCache) {
+            memoryCache[text]?.let { return@withContext it }
+        }
+        
+        // 2. Check Room database
+        val translationDao = database?.translationDao()
+        val cachedTranslation = translationDao?.getTranslation(text)
+        if (cachedTranslation != null) {
+            synchronized(memoryCache) {
+                memoryCache[text] = cachedTranslation
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+            return@withContext cachedTranslation
         }
-    }
-
-    private fun saveCacheToFile() {
-        try {
-            val json = gson.toJson(memoryCache)
-            cacheFile?.writeText(json)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    suspend fun translate(text: String?): String {
-        if (text.isNullOrBlank()) return ""
         
-        // 1. Buscar en memoria (cargada desde archivo al inicio)
-        memoryCache[text]?.let { return it }
-        
+        // 3. Perform ML Kit translation
         try {
             ensureModelDownloaded()
             val translatedText = translator.translate(text).await()
             
-            // 2. Guardar en memoria y persistir en archivo
-            memoryCache[text] = translatedText
-            saveCacheToFile()
+            // Save to memory cache and Room
+            synchronized(memoryCache) {
+                memoryCache[text] = translatedText
+            }
+            translationDao?.insert(TranslationEntity(text, translatedText))
             
-            return translatedText
+            return@withContext translatedText
         } catch (e: Exception) {
-            return text // Fallback
+            return@withContext text // Fallback
         }
     }
 
