@@ -244,9 +244,9 @@ fun ScreenSupermarkets(
     val isEs = currentLanguage.value == "es"
     val context = LocalContext.current
 
-    val currentUser = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser }
+    val isUserLoggedIn = remember { com.example.uami.utils.AuthManager.isUserLoggedIn() }
 
-    if (currentUser == null) {
+    if (!isUserLoggedIn) {
         Scaffold(
             topBar = {
                 Column(modifier = Modifier.background(Background).statusBarsPadding().padding(top = 16.dp, bottom = 8.dp)) {

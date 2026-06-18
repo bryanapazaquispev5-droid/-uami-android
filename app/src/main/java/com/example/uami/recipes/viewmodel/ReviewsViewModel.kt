@@ -23,9 +23,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 
-class ReviewsViewModel(private val repository: RecipeRepository) : ViewModel() {
-    private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
+import com.example.uami.recipes.data.FirebaseRepository
+
+class ReviewsViewModel(private val repository: RecipeRepository, private val firebaseRepo: FirebaseRepository = FirebaseRepository()) : ViewModel() {
+    private val auth = firebaseRepo.auth
+    private val firestore = firebaseRepo.firestore
     private var userDocListener: ListenerRegistration? = null
 
     private val _currentUser = MutableStateFlow<FirebaseUser?>(auth.currentUser)
@@ -171,35 +173,7 @@ class ReviewsViewModel(private val repository: RecipeRepository) : ViewModel() {
     }
 
     private fun compressUriToBase64(context: Context, uri: Uri): String? {
-        return try {
-            val inputStream = context.contentResolver.openInputStream(uri)
-            val originalBitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream?.close()
-
-            if (originalBitmap == null) return null
-
-            // Resize to max 120x120 pixels to keep it small and fast
-            val maxDimension = 120
-            val width = originalBitmap.width
-            val height = originalBitmap.height
-            val (newWidth, newHeight) = if (width > height) {
-                val ratio = height.toFloat() / width
-                maxDimension to (maxDimension * ratio).toInt()
-            } else {
-                val ratio = width.toFloat() / height
-                (maxDimension * ratio).toInt() to maxDimension
-            }
-
-            val scaledBitmap = Bitmap.createScaledBitmap(originalBitmap, newWidth, newHeight, true)
-
-            val outputStream = ByteArrayOutputStream()
-            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream) // 70% quality
-            val bytes = outputStream.toByteArray()
-            Base64.encodeToString(bytes, Base64.NO_WRAP)
-        } catch (e: Exception) {
-            Log.e("BASE64_COMPRESS", "Error compressing image: ${e.message}")
-            null
-        }
+        return firebaseRepo.compressUriToBase64(context, uri)
     }
 
     fun registerWithEmailAndPasswordAndCustomPhoto(

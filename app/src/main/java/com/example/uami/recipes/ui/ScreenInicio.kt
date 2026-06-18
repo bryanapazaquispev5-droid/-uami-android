@@ -350,7 +350,7 @@ fun ScreenInicio(
                             HeartBurstButton(
                                 isFav = isFav,
                                 onFavToggle = {
-                                    if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                    if (!com.example.uami.utils.AuthManager.isUserLoggedIn()) {
                                         Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", Toast.LENGTH_SHORT).show()
                                         navController.navigate("perfil")
                                     } else {
@@ -629,7 +629,7 @@ fun ScreenInicio(
                         recipe = recipe,
                         isFav = favoritos.contains(recipe.id),
                         onFavToggle = {
-                            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                            if (!com.example.uami.utils.AuthManager.isUserLoggedIn()) {
                                 Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", Toast.LENGTH_SHORT).show()
                                 navController.navigate("perfil")
                             } else {

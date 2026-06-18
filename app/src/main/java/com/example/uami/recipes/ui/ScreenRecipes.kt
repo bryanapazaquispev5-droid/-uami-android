@@ -401,7 +401,7 @@ fun ScreenRecipes(
                                     recipe = recipe,
                                     isFav = favoritos.contains(recipe.id),
                                     onFavToggle = {
-                                        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                        if (!com.example.uami.utils.AuthManager.isUserLoggedIn()) {
                                             android.widget.Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", android.widget.Toast.LENGTH_SHORT).show()
                                             navController.navigate("perfil")
                                         } else {
@@ -442,7 +442,7 @@ fun ScreenRecipes(
                                     recipe = recipe,
                                     isFav = favoritos.contains(recipe.id),
                                     onFavToggle = {
-                                        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                        if (!com.example.uami.utils.AuthManager.isUserLoggedIn()) {
                                             android.widget.Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", android.widget.Toast.LENGTH_SHORT).show()
                                             navController.navigate("perfil")
                                         } else {
@@ -780,7 +780,7 @@ fun ScreenRecipeDetail(navController: NavHostController, id: Int, favoritos: Mut
                     HeartBurstButton(
                         isFav = isFav,
                         onFavToggle = {
-                            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                            if (!com.example.uami.utils.AuthManager.isUserLoggedIn()) {
                                 android.widget.Toast.makeText(context, if (isEs) "Inicia sesión para guardar favoritos" else "Sign in to save favorites", android.widget.Toast.LENGTH_SHORT).show()
                                 navController.navigate("perfil")
                             } else {
@@ -994,9 +994,9 @@ fun ScreenCookingMode(
     preloadedRecipes: List<RecipeModel>
 ) {
     val isEs = currentLanguage.value == "es"
-    val currentUser = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser }
+    val isUserLoggedIn = remember { com.example.uami.utils.AuthManager.isUserLoggedIn() }
 
-    if (currentUser == null) {
+    if (!isUserLoggedIn) {
         Scaffold(
             topBar = {
                 Column(modifier = Modifier.background(Background).statusBarsPadding().padding(top = 16.dp, bottom = 8.dp)) {
