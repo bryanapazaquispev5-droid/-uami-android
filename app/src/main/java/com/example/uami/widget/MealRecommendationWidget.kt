@@ -37,6 +37,7 @@ class MealRecommendationWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_REFRESH = "com.example.uami.widget.ACTION_REFRESH"
         const val EXTRA_RECIPE_ID = "widget_recipe_id"
+        const val EXTRA_GO_TO_COOKING = "widget_go_to_cooking"
 
         fun getMealTypeKeywords(): List<String> {
             val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -182,25 +183,125 @@ class MealRecommendationWidget : AppWidgetProvider() {
         fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
-            appWidgetId: Int
+            appWidgetId: Int,
+            newOptions: android.os.Bundle? = null,
+            forceRefresh: Boolean = false
         ) {
             CoroutineScope(Dispatchers.IO).launch {
                 val db         = UamiDatabase.getDatabase(context)
                 val allRecipes = db.recipeDao().getAllRecipes()
 
-                val keywords  = getMealTypeKeywords()
-                val filtered  = allRecipes.filter { recipe ->
-                    val typeEn = recipe.mealTypeEn?.lowercase() ?: recipe.mealType?.lowercase() ?: ""
-                    keywords.any { kw -> kw in typeEn }
-                }
-                val candidates = if (filtered.isNotEmpty()) filtered else allRecipes
-                val recipe: RecipeEntity? = if (candidates.isNotEmpty()) candidates.random() else null
+                // Obtener opciones del widget para determinar el tamaño en dp
+                val options = newOptions ?: appWidgetManager.getAppWidgetOptions(appWidgetId)
+                val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180)
+                val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 50)
 
-                // Descargar imagen real de la receta
-                val bitmap: Bitmap? = recipe?.let { downloadBitmap(it.image) }
+                // Determinar layout según las dimensiones (1x3, 2x3 o 2x4)
+                val layoutId = if (minHeight > 0 && minHeight < 100) {
+                    // 1x3 (1 fila de alto, 3-4 columnas de ancho)
+                    R.layout.widget_meal_recommendation_1x3
+                } else {
+                    // 2 filas de alto
+                    if (minWidth >= 240) {
+                        // 2x4 (2 filas de alto, 4 columnas de ancho)
+                        R.layout.widget_meal_recommendation_2x4
+                    } else {
+                        // 2x3 (2 filas de alto, 3 columnas de ancho)
+                        R.layout.widget_meal_recommendation_2x3
+                    }
+                }
+
+                android.util.Log.d("UAMI_WIDGET", "updateAppWidget id=$appWidgetId size=${minWidth}x${minHeight}dp -> layoutId=$layoutId")
+
+                val currentMealLabel = getMealLabel()
+                val prefs = context.getSharedPreferences("uami_widget_prefs", Context.MODE_PRIVATE)
+                val savedRecipeId = prefs.getInt("widget_${appWidgetId}_recipe_id", -1)
+                val savedMealType = prefs.getString("widget_${appWidgetId}_meal_type", "")
+
+                val recipe: RecipeEntity?
+                val keywords = getMealTypeKeywords()
+
+                if (!forceRefresh && savedRecipeId != -1 && savedMealType == currentMealLabel) {
+                    // Cargar la receta que ya se estaba mostrando
+                    val savedRecipe = allRecipes.find { it.id == savedRecipeId }
+                    recipe = savedRecipe ?: if (allRecipes.isNotEmpty()) {
+                        val filtered = allRecipes.filter { r ->
+                            val typeEn = r.mealTypeEn?.lowercase() ?: r.mealType?.lowercase() ?: ""
+                            keywords.any { kw -> kw in typeEn }
+                        }
+                        val cand = if (filtered.isNotEmpty()) filtered else allRecipes
+                        val chosen = cand.random()
+                        prefs.edit()
+                            .putInt("widget_${appWidgetId}_recipe_id", chosen.id)
+                            .putString("widget_${appWidgetId}_meal_type", currentMealLabel)
+                            .apply()
+                        chosen
+                    } else null
+                } else {
+                    // Elegir una nueva receta (porque cambió de horario, es la primera vez, o se presionó refresh)
+                    if (allRecipes.isNotEmpty()) {
+                        val filtered = allRecipes.filter { r ->
+                            val typeEn = r.mealTypeEn?.lowercase() ?: r.mealType?.lowercase() ?: ""
+                            keywords.any { kw -> kw in typeEn }
+                        }
+                        val cand = if (filtered.isNotEmpty()) filtered else allRecipes
+                        val chosen = cand.random()
+                        prefs.edit()
+                            .putInt("widget_${appWidgetId}_recipe_id", chosen.id)
+                            .putString("widget_${appWidgetId}_meal_type", currentMealLabel)
+                            .apply()
+                        recipe = chosen
+                    } else {
+                        recipe = null
+                    }
+                }
+
+                // Descargar o cargar imagen real de la receta
+                val targetPx = if (layoutId == R.layout.widget_meal_recommendation_2x4) 240 else 168
+                val bitmap: Bitmap? = recipe?.let { downloadBitmap(it.image, targetPx) }
 
                 withContext(Dispatchers.Main) {
-                    val views = RemoteViews(context.packageName, R.layout.widget_meal_recommendation)
+                    val views = RemoteViews(context.packageName, layoutId)
+
+                    // ── Paleta de colores según el momento del día ──
+                    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                    val headerBg: Int
+                    val cookingBg: Int
+                    val refreshBg: Int
+                    val accentColorStr: String
+
+                    if (hour in 5..10) {
+                        headerBg = R.drawable.widget_header_bg_desayuno
+                        cookingBg = R.drawable.widget_btn_cooking_desayuno
+                        refreshBg = R.drawable.widget_btn_refresh_desayuno
+                        accentColorStr = "#FFF57C00"
+                    } else if (hour in 11..14) {
+                        headerBg = R.drawable.widget_header_bg_almuerzo
+                        cookingBg = R.drawable.widget_btn_cooking_almuerzo
+                        refreshBg = R.drawable.widget_btn_refresh_almuerzo
+                        accentColorStr = "#FF00796B"
+                    } else if (hour in 15..21) {
+                        headerBg = R.drawable.widget_header_bg_cena
+                        cookingBg = R.drawable.widget_btn_cooking_cena
+                        refreshBg = R.drawable.widget_btn_refresh_cena
+                        accentColorStr = "#FF3F51B5"
+                    } else {
+                        headerBg = R.drawable.widget_header_bg_snack
+                        cookingBg = R.drawable.widget_btn_cooking_snack
+                        refreshBg = R.drawable.widget_btn_refresh_snack
+                        accentColorStr = "#FF8E24AA"
+                    }
+
+                    // Aplicar fondos dinámicos y colores de acento generales
+                    views.setInt(R.id.widget_header, "setBackgroundResource", headerBg)
+                    views.setInt(R.id.widget_refresh_btn, "setBackgroundResource", refreshBg)
+
+                    if (layoutId == R.layout.widget_meal_recommendation_2x4) {
+                        views.setInt(R.id.widget_cooking_btn, "setBackgroundResource", cookingBg)
+                        views.setTextColor(R.id.widget_ingredients_title, android.graphics.Color.parseColor(accentColorStr))
+                    } else if (layoutId == R.layout.widget_meal_recommendation_1x3) {
+                        views.setTextColor(R.id.widget_meal_type, android.graphics.Color.parseColor(accentColorStr))
+                    }
 
                     if (recipe != null) {
                         val desc   = buildDesc(recipe)
@@ -212,6 +313,32 @@ class MealRecommendationWidget : AppWidgetProvider() {
                         views.setTextViewText(R.id.widget_dish_name,   recipe.name ?: "Sin nombre")
                         views.setTextViewText(R.id.widget_dish_desc,   desc)
                         views.setTextViewText(R.id.widget_dish_rating, rating)
+
+                        // Configurar información extra (Dificultad + tiempo)
+                        val totalTime = (recipe.prepTimeMinutes ?: 0) + (recipe.cookTimeMinutes ?: 0)
+                        val difficultyTrans = when (recipe.difficulty?.lowercase()) {
+                            "easy" -> "Fácil"
+                            "medium" -> "Media"
+                            "hard" -> "Difícil"
+                            else -> recipe.difficulty ?: ""
+                        }
+                        val extraInfoText = when {
+                            difficultyTrans.isNotBlank() && totalTime > 0 -> "$difficultyTrans · $totalTime min"
+                            difficultyTrans.isNotBlank() -> difficultyTrans
+                            totalTime > 0 -> "$totalTime min"
+                            else -> ""
+                        }
+                        views.setTextViewText(R.id.widget_extra_info, extraInfoText)
+
+                        // Configurar ingredientes si es el layout de 2x4
+                        val ingredientsList = recipe.ingredients
+                        if (layoutId == R.layout.widget_meal_recommendation_2x4 && ingredientsList != null && ingredientsList.isNotEmpty()) {
+                            val ingredientsText = ingredientsList.take(5).joinToString(", ")
+                            views.setTextViewText(R.id.widget_ingredients_list, ingredientsText)
+                            views.setViewVisibility(R.id.widget_ingredients_container, android.view.View.VISIBLE)
+                        } else {
+                            views.setViewVisibility(R.id.widget_ingredients_container, android.view.View.GONE)
+                        }
 
                         // Imagen real de la receta (si se descargó) o ícono de la app
                         if (bitmap != null) {
@@ -230,6 +357,18 @@ class MealRecommendationWidget : AppWidgetProvider() {
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
                         views.setOnClickPendingIntent(R.id.widget_root, detailPending)
+
+                        // ── Click en el botón Cocinar → abrir modo cocina de ESTA receta ──
+                        val cookingIntent = Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            putExtra(EXTRA_RECIPE_ID, recipe.id)
+                            putExtra(EXTRA_GO_TO_COOKING, true)
+                        }
+                        val cookingPending = PendingIntent.getActivity(
+                            context, appWidgetId * 1000 + recipe.id + 50000, cookingIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        views.setOnClickPendingIntent(R.id.widget_cooking_btn, cookingPending)
 
                     } else {
                         // DB vacía — abrir la app normalmente
@@ -268,6 +407,16 @@ class MealRecommendationWidget : AppWidgetProvider() {
         }
     }
 
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: android.os.Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateAppWidget(context, appWidgetManager, appWidgetId, newOptions)
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -287,7 +436,15 @@ class MealRecommendationWidget : AppWidgetProvider() {
             )
             if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
                 val manager = AppWidgetManager.getInstance(context)
-                updateAppWidget(context, manager, widgetId)
+                updateAppWidget(context, manager, widgetId, forceRefresh = true)
+            }
+        } else if (intent.action == Intent.ACTION_TIME_CHANGED ||
+                   intent.action == Intent.ACTION_TIMEZONE_CHANGED) {
+            val manager = AppWidgetManager.getInstance(context)
+            val component = android.content.ComponentName(context, MealRecommendationWidget::class.java)
+            val ids = manager.getAppWidgetIds(component)
+            for (id in ids) {
+                updateAppWidget(context, manager, id, forceRefresh = false)
             }
         }
     }

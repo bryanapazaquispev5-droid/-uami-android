@@ -96,6 +96,7 @@ fun isInternetAvailable(context: Context): Boolean {
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var widgetRecipeId by mutableStateOf(-1)
+    private var widgetGoToCooking by mutableStateOf(false)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -103,6 +104,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val id = intent.getIntExtra(MealRecommendationWidget.EXTRA_RECIPE_ID, -1)
         if (id != -1) {
             widgetRecipeId = id
+            widgetGoToCooking = intent.getBooleanExtra(MealRecommendationWidget.EXTRA_GO_TO_COOKING, false)
         }
     }
 
@@ -111,7 +113,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         enableEdgeToEdge()
 
         intent?.getIntExtra(MealRecommendationWidget.EXTRA_RECIPE_ID, -1)?.let { id ->
-            if (id != -1) widgetRecipeId = id
+            if (id != -1) {
+                widgetRecipeId = id
+                widgetGoToCooking = intent.getBooleanExtra(MealRecommendationWidget.EXTRA_GO_TO_COOKING, false)
+            }
         }
         
         // Inicializar Utilidades
@@ -156,7 +161,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 UamiApp(
                     tts = tts,
                     widgetRecipeId = widgetRecipeId,
-                    onConsumedWidgetRecipe = { widgetRecipeId = -1 }
+                    widgetGoToCooking = widgetGoToCooking,
+                    onConsumedWidgetRecipe = { 
+                        widgetRecipeId = -1
+                        widgetGoToCooking = false
+                    }
                 )
             }
         }
@@ -207,6 +216,7 @@ fun Context.findActivity(): ComponentActivity? {
 fun UamiApp(
     tts: TextToSpeech?,
     widgetRecipeId: Int,
+    widgetGoToCooking: Boolean,
     onConsumedWidgetRecipe: () -> Unit
 ) {
     val context = LocalContext.current
@@ -263,18 +273,20 @@ fun UamiApp(
     val navController = rememberNavController()
 
     // Deep-link desde el widget: navegar al detalle de la receta cuando la app esté lista
-    LaunchedEffect(widgetRecipeId, hasLocalCacheState, isPreparingDataState, isDownloadFailedState) {
+    LaunchedEffect(widgetRecipeId, widgetGoToCooking, hasLocalCacheState, isPreparingDataState, isDownloadFailedState) {
         if (widgetRecipeId != -1 &&
             hasLocalCacheState &&
             !isPreparingDataState &&
             !isDownloadFailedState
         ) {
-            navController.navigate("recipeDetail/$widgetRecipeId") {
+            val route = if (widgetGoToCooking) "cookingMode/$widgetRecipeId" else "recipeDetail/$widgetRecipeId"
+            navController.navigate(route) {
                 launchSingleTop = true
             }
             // Limpiar el extra para que no navegue de nuevo al recomponerse o al hacer click de nuevo
             onConsumedWidgetRecipe()
             activity.intent?.removeExtra(MealRecommendationWidget.EXTRA_RECIPE_ID)
+            activity.intent?.removeExtra(MealRecommendationWidget.EXTRA_GO_TO_COOKING)
         }
     }
 
