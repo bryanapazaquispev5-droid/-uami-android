@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Uami</string>
+    <string name="widget_name">Uami · Recomienda</string>
+    <string name="widget_description">Recomienda una comida según la hora del día</string>
+    <string name="meal_breakfast">Desayuno</string>
+    <string name="meal_lunch">Almuerzo</string>
+    <string name="meal_dinner">Cena</string>
+    <string name="meal_snack">Snack nocturno</string>
 </resources>

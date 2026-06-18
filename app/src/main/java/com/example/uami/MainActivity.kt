@@ -3,6 +3,7 @@ package com.example.uami
 import android.util.Log
 import android.os.Bundle
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.activity.ComponentActivity
@@ -69,6 +70,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.sp
 
 import com.example.uami.sync.UpdateManager
+import com.example.uami.widget.MealRecommendationWidget
 import com.example.uami.sync.SyncResult
 import com.example.uami.ui.screens.*
 import coil.compose.AsyncImage
@@ -93,10 +95,24 @@ fun isInternetAvailable(context: Context): Boolean {
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
+    private var widgetRecipeId by mutableStateOf(-1)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val id = intent.getIntExtra(MealRecommendationWidget.EXTRA_RECIPE_ID, -1)
+        if (id != -1) {
+            widgetRecipeId = id
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        intent?.getIntExtra(MealRecommendationWidget.EXTRA_RECIPE_ID, -1)?.let { id ->
+            if (id != -1) widgetRecipeId = id
+        }
         
         // Inicializar Utilidades
         LanguageManager.init(this)
@@ -137,7 +153,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 ),
                 typography = AppTypography
             ) {
-                UamiApp(tts)
+                UamiApp(
+                    tts = tts,
+                    widgetRecipeId = widgetRecipeId,
+                    onConsumedWidgetRecipe = { widgetRecipeId = -1 }
+                )
             }
         }
     }
@@ -184,7 +204,11 @@ fun Context.findActivity(): ComponentActivity? {
 }
 
 @Composable
-fun UamiApp(tts: TextToSpeech?) {
+fun UamiApp(
+    tts: TextToSpeech?,
+    widgetRecipeId: Int,
+    onConsumedWidgetRecipe: () -> Unit
+) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity()!! }
     val repository = remember { RecipeRepository(context.applicationContext) }
@@ -237,6 +261,22 @@ fun UamiApp(tts: TextToSpeech?) {
     }
 
     val navController = rememberNavController()
+
+    // Deep-link desde el widget: navegar al detalle de la receta cuando la app esté lista
+    LaunchedEffect(widgetRecipeId, hasLocalCacheState, isPreparingDataState, isDownloadFailedState) {
+        if (widgetRecipeId != -1 &&
+            hasLocalCacheState &&
+            !isPreparingDataState &&
+            !isDownloadFailedState
+        ) {
+            navController.navigate("recipeDetail/$widgetRecipeId") {
+                launchSingleTop = true
+            }
+            // Limpiar el extra para que no navegue de nuevo al recomponerse o al hacer click de nuevo
+            onConsumedWidgetRecipe()
+            activity.intent?.removeExtra(MealRecommendationWidget.EXTRA_RECIPE_ID)
+        }
+    }
 
     // Guardar el idioma cuando cambie
     LaunchedEffect(currentLanguageState) {

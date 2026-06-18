@@ -42,6 +42,20 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- ── Widget de Recomendación de Comidas ── -->
+        <receiver
+            android:name=".widget.MealRecommendationWidget"
+            android:exported="true"
+            android:label="Uami · Recomienda">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.uami.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/meal_widget_info" />
+        </receiver>
     </application>
 
 </manifest>
