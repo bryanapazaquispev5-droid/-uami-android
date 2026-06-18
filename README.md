@@ -1,4 +1,4 @@
-# Uami - Asistente Gourmet e IA de Cocina Offline
+# <img src="uamilogo.png" align="right" width="90px"/> Uami - Asistente Gourmet e IA de Cocina Offline
 
 **Uami** es una aplicación móvil nativa para Android diseñada para simplificar y enriquecer la experiencia de cocinar en el hogar. Combina un catálogo gourmet inteligente con un asistente de nutrición basado en modelos de lenguaje avanzados que se ejecutan completamente en el dispositivo de forma segura y privada.
 
@@ -16,6 +16,7 @@
 *   **Base de Datos Local (Room):** Persistencia local de recetas y traducción de textos mediante Room Database. Implementa transacciones de base de datos seguras, flujos de datos reactivos con Flow y corrutinas.
 *   **Sincronización en la Nube de Favoritos**: Sistema híbrido (local y remoto) que sincroniza en tiempo real los favoritos del chef con Firebase Firestore. Si el usuario inicia sesión por primera vez, realiza una fusión inteligente (unión) de sus favoritos de invitado con la nube para evitar pérdida de datos.
 *   **Avatares Personalizados y Perfil de Chef**: Registro e inicio de sesión integrados donde el chef puede elegir un avatar preestablecido o subir su propia foto de perfil de galería (comprimida y convertida a Base64 en memoria de forma optimizada para caber en Firestore), actualizando su identidad al instante en todas las pantallas.
+*   **Widget de Recomendación Adaptativo (App Widgets):** Widget interactivo de pantalla de inicio en formatos **1x3**, **2x3** y **2x4** que sugiere recetas basadas en la hora del día. Ofrece refresco manual (`↻`), acceso directo al modo cocina (en el formato 2x4), y una paleta de colores degradados dinámica que cambia según el momento del día (Desayuno, Almuerzo, Cena, Snack).
 *   **Diseño Premium y Fluido:** Interfaz oscura con gradientes metálicos y glassmorphic, efectos de deformación elástica (bouncy click), animaciones Lottie, transiciones de tarjetas de perfil y confeti dinámico para marcar favoritos.
 
 ---
@@ -29,6 +30,7 @@
 *   **Animaciones:** Lottie Compose + confeti vectorial personalizado en Canvas
 *   **Servicios de Mapas:** Google Maps SDK para Android + Jetpack Compose Maps wrapper
 *   **Navegación:** Jetpack Navigation Compose
+*   **Componentes de Escritorio:** Android App Widgets (`AppWidgetProvider` + `RemoteViews`) con soporte para redimensionamiento inteligente y persistencia de estado por Widget ID.
 *   **Base de Datos Local (Room):** Room 2.8.4 (con TypeConverters basados en Gson) para almacenamiento local de recetas y traducciones de ML Kit.
 *   **Servicios en la Nube / Firebase:**
     *   **Firebase Cloud Messaging (FCM v1)** (Notificaciones Push remotas)
@@ -65,9 +67,9 @@ La aplicación implementa la persistencia de datos cumpliendo con arquitectura l
 
 ## 📸 Capturas de Pantalla
 
-| Pantalla Principal | Lista de Ingredientes | Nutriólogo AI |
+| Logo del Proyecto | Pantalla Principal | Nutriólogo AI |
 | :---: | :---: | :---: |
-| ![Inicio](app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png) | *(Captura 2)* | *(Captura 3)* |
+| ![Uami Logo](uamilogo.png) | *(Captura 2)* | *(Captura 3)* |
 
 ---
 
