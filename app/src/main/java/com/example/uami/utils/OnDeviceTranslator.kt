@@ -62,6 +62,13 @@ object OnDeviceTranslator {
         }
     }
 
+    suspend fun clearCache() = withContext(Dispatchers.IO) {
+        synchronized(memoryCache) {
+            memoryCache.clear()
+        }
+        database?.translationDao()?.clearAll()
+    }
+
     private suspend fun ensureModelDownloaded() {
         if (!isModelDownloaded) {
             val conditions = DownloadConditions.Builder()

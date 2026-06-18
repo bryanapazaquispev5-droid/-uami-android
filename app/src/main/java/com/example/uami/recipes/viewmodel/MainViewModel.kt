@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import android.util.Log
 
 class MainViewModel(private val repository: RecipeRepository) : ViewModel() {
     private val _currentLanguage = MutableStateFlow(LanguageManager.getLanguage())
@@ -65,8 +67,14 @@ class MainViewModel(private val repository: RecipeRepository) : ViewModel() {
         LanguageManager.setLanguage(language)
     }
 
+    private var syncJob: Job? = null
+
     fun startSync(isFirstRun: Boolean) {
-        viewModelScope.launch {
+        if (syncJob?.isActive == true) {
+            Log.d("MAIN_VIEW_MODEL", "Sync already running, ignoring duplicate request")
+            return
+        }
+        syncJob = viewModelScope.launch {
             _isPreparingData.value = true
             _isDownloadFailed.value = false
             

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -216,16 +217,21 @@ fun ScreenRecipes(
     val filterState by recipesViewModel.filterState.collectAsState()
     val filteredAndSortedRecipes by recipesViewModel.filteredAndSortedRecipes.collectAsState()
 
+    var isFiltersInitialized by rememberSaveable { mutableStateOf(false) }
+
     // Configurar estado de filtros iniciales una sola vez
     LaunchedEffect(initialSearchQuery, initialCuisine, initialMealType, initialDifficulty) {
-        recipesViewModel.updateFilterState(
-            FilterState(
-                searchQuery = initialSearchQuery,
-                selectedCuisine = initialCuisine,
-                selectedDifficulty = initialDifficulty,
-                selectedMealType = initialMealType
+        if (!isFiltersInitialized) {
+            recipesViewModel.updateFilterState(
+                FilterState(
+                    searchQuery = initialSearchQuery,
+                    selectedCuisine = initialCuisine,
+                    selectedDifficulty = initialDifficulty,
+                    selectedMealType = initialMealType
+                )
             )
-        )
+            isFiltersInitialized = true
+        }
     }
 
     // Sincronizar con datos precargados o cargar desde cache

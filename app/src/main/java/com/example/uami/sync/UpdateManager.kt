@@ -13,6 +13,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
+import com.example.uami.utils.OnDeviceTranslator
 import kotlinx.coroutines.tasks.await
 
 class UpdateManager(
@@ -45,7 +47,7 @@ class UpdateManager(
             val firestoreRecipes = mutableListOf<RecipeModel>()
 
             val snapshot = kotlinx.coroutines.withTimeoutOrNull(8000) {
-                db.collection("recipes").get().await()
+                db.collection("recipes").get(Source.SERVER).await()
             }
 
             if (snapshot != null) {
@@ -98,11 +100,12 @@ class UpdateManager(
                 throw Exception("FIRESTORE_EMPTY")
             }
 
-            // Generar Hash para detectar cambios
+            // Ordenar por ID para garantizar la estabilidad del hash
+            firestoreRecipes.sortBy { it.id }
             val currentHash = firestoreRecipes.hashCode()
 
-            // Si no es el primer arranque y el hash es igual, NO HAY CAMBIOS
-            if (!isFirstRun && cacheManager.hasCache() && cacheManager.getApiHash() == currentHash) {
+            // Si tenemos cache y el hash es igual, NO HAY CAMBIOS
+            if (cacheManager.hasCache() && cacheManager.getApiHash() == currentHash) {
                 Log.d("UPDATE_MANAGER", "No hay cambios detectados. Iniciando rápido.")
                 return SyncResult.Success(cacheManager.loadRecipes(), wasUpdated = false)
             }
@@ -160,6 +163,7 @@ class UpdateManager(
 
             // 5. Guardar en Caché
             if (processedRecipes.isNotEmpty()) {
+                OnDeviceTranslator.clearCache()
                 cacheManager.saveRecipes(processedRecipes)
                 cacheManager.saveApiHash(currentHash)
             }
